@@ -208,6 +208,9 @@ const ClaimsForm = () => {
         aceptacion_privacidad: formData.acceptedPrivacy
       };
 
+      // Verificar si la tabla tiene la columna 'aceptacion_privacidad'
+      console.log('Enviando datos del reclamo:', reclamacionData);
+
       // Guardar en Supabase
       const { data, error } = await supabase
         .from('reclamaciones_r2x4')
@@ -215,6 +218,7 @@ const ClaimsForm = () => {
         .select();
 
       if (error) {
+        console.error('Error en la respuesta de Supabase:', error);
         throw error;
       }
 
@@ -230,7 +234,14 @@ const ClaimsForm = () => {
 
     } catch (error) {
       console.error('Error al enviar el reclamo:', error);
-      setSubmitError('Hubo un error al enviar el formulario. Por favor intenta de nuevo.');
+      
+      // Mensaje de error más detallado para ayudar en la depuración
+      let errorMessage = 'Hubo un error al enviar el formulario. Por favor intenta de nuevo.';
+      if (error.message) {
+        errorMessage += ' Detalle: ' + error.message;
+      }
+      
+      setSubmitError(errorMessage);
     } finally {
       setSubmitting(false);
     }
