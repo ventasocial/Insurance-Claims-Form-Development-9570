@@ -170,6 +170,7 @@ const ClaimsForm = () => {
 
   // Validaciones mejoradas
   const validateWhatsApp = (phone) => {
+    if (!phone) return false;
     const phoneRegex = /^\+52\d{10}$/;
     return phoneRegex.test(phone);
   };
@@ -211,25 +212,32 @@ const ClaimsForm = () => {
         // Verificar que al menos el titular del seguro tenga la información completa
         const titular = formData.personsInvolved.titularAsegurado || {};
         const titularValid = titular.nombres && titular.apellidoPaterno && titular.apellidoMaterno &&
-          titular.email && validateEmail(titular.email) &&
-          titular.telefono && validateWhatsApp(titular.telefono);
+          titular.email && validateEmail(titular.email);
+        
+        // WhatsApp es opcional para titular
+        const titularPhoneValid = !titular.telefono || validateWhatsApp(titular.telefono);
 
         // Verificar el asegurado afectado
         const afectado = formData.personsInvolved.aseguradoAfectado || {};
         const afectadoValid = afectado.nombres && afectado.apellidoPaterno && afectado.apellidoMaterno &&
-          afectado.email && validateEmail(afectado.email) &&
-          afectado.telefono && validateWhatsApp(afectado.telefono);
+          afectado.email && validateEmail(afectado.email);
+        
+        // WhatsApp es opcional para afectado
+        const afectadoPhoneValid = !afectado.telefono || validateWhatsApp(afectado.telefono);
 
         // Si es reembolso, verificar también el titular de la cuenta
         let cuentaValid = true;
         if (formData.claimType === 'reembolso') {
           const cuenta = formData.personsInvolved.titularCuenta || {};
           cuentaValid = cuenta.nombres && cuenta.apellidoPaterno && cuenta.apellidoMaterno &&
-            cuenta.email && validateEmail(cuenta.email) &&
-            cuenta.telefono && validateWhatsApp(cuenta.telefono);
+            cuenta.email && validateEmail(cuenta.email);
+          
+          // WhatsApp es opcional para titular de cuenta
+          const cuentaPhoneValid = !cuenta.telefono || validateWhatsApp(cuenta.telefono);
+          cuentaValid = cuentaValid && cuentaPhoneValid;
         }
 
-        return contactValid && titularValid && afectadoValid && cuentaValid;
+        return contactValid && titularValid && titularPhoneValid && afectadoValid && afectadoPhoneValid && cuentaValid;
       case 'description':
         return formData.sinisterDescription && formData.sinisterDescription.trim().length > 10;
       case 'documents':

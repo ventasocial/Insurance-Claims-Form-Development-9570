@@ -1,110 +1,116 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import SafeIcon from '../../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
 const { FiUser, FiCheck, FiAlertCircle } = FiIcons;
 
-const ContactForm = ({ initialData = {}, onDataChange, title, description, showValidation = true }) => {
+const ContactForm = ({
+  initialData = {},
+  onDataChange,
+  title,
+  description,
+  showValidation = true,
+  whatsappOptional = false,
+  hideHeader = false
+}) => {
   // Estado local para los datos del formulario
   const [formData, setFormData] = useState(initialData);
-  
   // Estado para validación
   const [isValid, setIsValid] = useState(false);
   const [touchedFields, setTouchedFields] = useState({});
-  
+
   // Actualizar datos locales cuando cambian los datos iniciales
   useEffect(() => {
     setFormData(initialData);
   }, [initialData]);
-  
-  // Validar formulario
+
+  // Función memoizada para validar el formulario
+  const validateForm = useCallback(() => {
+    const { nombres, apellidoPaterno, apellidoMaterno, email, telefono } = formData;
+    
+    // Validación de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const isEmailValid = email && emailRegex.test(email);
+    
+    // Validación de teléfono (WhatsApp)
+    const phoneRegex = /^\+52\d{10}$/;
+    const isPhoneValid = whatsappOptional ? 
+      (telefono ? phoneRegex.test(telefono) : true) : 
+      (telefono && phoneRegex.test(telefono));
+    
+    return !!(
+      nombres && 
+      apellidoPaterno && 
+      apellidoMaterno && 
+      isEmailValid && 
+      isPhoneValid
+    );
+  }, [formData, whatsappOptional]);
+
+  // Validar formulario y notificar cambios
   useEffect(() => {
-    const validateForm = () => {
-      const { nombres, apellidoPaterno, apellidoMaterno, email, telefono } = formData;
-      
-      // Validación de email
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      const isEmailValid = email && emailRegex.test(email);
-      
-      // Validación de teléfono (WhatsApp)
-      const phoneRegex = /^\+52\d{10}$/;
-      const isPhoneValid = telefono && phoneRegex.test(telefono);
-      
-      return !!(
-        nombres && 
-        apellidoPaterno && 
-        apellidoMaterno && 
-        isEmailValid && 
-        isPhoneValid
-      );
-    };
-    
     const newIsValid = validateForm();
-    setIsValid(newIsValid);
     
+    // Solo actualizar si hay cambios
+    if (newIsValid !== isValid) {
+      setIsValid(newIsValid);
+    }
+
     // Notificar al componente padre si hay cambios
     if (onDataChange) {
       onDataChange(formData, newIsValid);
     }
-  }, [formData, onDataChange]);
-  
+  }, [formData, validateForm, onDataChange, isValid]);
+
   // Manejar cambios en los campos
-  const handleChange = (field, value) => {
-    const newData = { 
-      ...formData,
-      [field]: value 
-    };
-    
-    setFormData(newData);
-    
+  const handleChange = useCallback((field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+
     // Marcar el campo como tocado
-    if (!touchedFields[field]) {
-      setTouchedFields({
-        ...touchedFields,
-        [field]: true
-      });
-    }
-  };
-  
+    setTouchedFields(prev => ({ ...prev, [field]: true }));
+  }, []);
+
   // Verificar si un campo tiene error
-  const hasError = (field) => {
+  const hasError = useCallback((field) => {
     if (!touchedFields[field]) return false;
-    
+
     switch (field) {
       case 'email':
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         return !formData.email || !emailRegex.test(formData.email);
       case 'telefono':
+        if (whatsappOptional && !formData.telefono) return false;
         const phoneRegex = /^\+52\d{10}$/;
         return !formData.telefono || !phoneRegex.test(formData.telefono);
       default:
         return !formData[field];
     }
-  };
-  
+  }, [formData, touchedFields, whatsappOptional]);
+
   return (
     <div className="bg-white rounded-lg p-6 shadow-sm">
       {/* Encabezado */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <div className="bg-blue-100 p-2 rounded-full">
-            <SafeIcon icon={FiUser} className="text-blue-600" />
+      {!hideHeader && title && (
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div className="bg-blue-100 p-2 rounded-full">
+              <SafeIcon icon={FiUser} className="text-blue-600" />
+            </div>
+            <div>
+              <h3 className="font-medium text-lg">{title}</h3>
+              {description && <p className="text-sm text-gray-500">{description}</p>}
+            </div>
           </div>
-          <div>
-            <h3 className="font-medium text-lg">{title}</h3>
-            {description && <p className="text-sm text-gray-500">{description}</p>}
-          </div>
+          {/* Indicador de validación */}
+          {showValidation && isValid && (
+            <div className="bg-green-100 p-1 rounded-full">
+              <SafeIcon icon={FiCheck} className="text-green-600" />
+            </div>
+          )}
         </div>
-        
-        {/* Indicador de validación */}
-        {showValidation && isValid && (
-          <div className="bg-green-100 p-1 rounded-full">
-            <SafeIcon icon={FiCheck} className="text-green-600" />
-          </div>
-        )}
-      </div>
-      
+      )}
+
       {/* Formulario */}
       <div className="grid md:grid-cols-2 gap-4">
         <div>
@@ -126,7 +132,6 @@ const ContactForm = ({ initialData = {}, onDataChange, title, description, showV
             </p>
           )}
         </div>
-        
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Apellido Paterno *
@@ -146,7 +151,6 @@ const ContactForm = ({ initialData = {}, onDataChange, title, description, showV
             </p>
           )}
         </div>
-        
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Apellido Materno *
@@ -166,10 +170,9 @@ const ContactForm = ({ initialData = {}, onDataChange, title, description, showV
             </p>
           )}
         </div>
-        
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            WhatsApp *
+            WhatsApp {whatsappOptional ? '' : '*'}
           </label>
           <input
             type="tel"
@@ -187,11 +190,10 @@ const ContactForm = ({ initialData = {}, onDataChange, title, description, showV
           )}
           {!hasError('telefono') && !touchedFields.telefono && (
             <p className="text-xs text-gray-500 mt-1">
-              Formato: +528122334455
+              Formato: +528122334455 {whatsappOptional ? '(opcional)' : ''}
             </p>
           )}
         </div>
-        
         <div className="md:col-span-2">
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Correo Electrónico *

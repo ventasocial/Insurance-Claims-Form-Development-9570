@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import SafeIcon from '../../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 import ContactForm from './ContactForm';
 
-const { FiInfo, FiUserPlus } = FiIcons;
+const { FiInfo, FiCopy } = FiIcons;
 
 const PersonsInvolved = ({ formData, updateFormData }) => {
   // Determinar si mostrar el titular de cuenta bancaria
@@ -18,30 +18,137 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
     titularCuenta: false
   });
 
+  // Flag para evitar bucles infinitos durante la copia de datos
+  const [isCopying, setIsCopying] = useState(false);
+
+  // Función memoizada para validar un formulario de contacto
+  const validateContactData = useCallback((data) => {
+    if (!data) return false;
+    
+    const { nombres, apellidoPaterno, apellidoMaterno, email, telefono } = data;
+    
+    // Validación de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const isEmailValid = email && emailRegex.test(email);
+    
+    // Validación de teléfono (WhatsApp) - opcional para personas involucradas excepto contactInfo
+    const phoneRegex = /^\+52\d{10}$/;
+    const isPhoneValid = telefono ? phoneRegex.test(telefono) : true; // Opcional
+    
+    return !!(
+      nombres && 
+      apellidoPaterno && 
+      apellidoMaterno && 
+      isEmailValid && 
+      isPhoneValid
+    );
+  }, []);
+
+  // Validación especial para contactInfo (teléfono obligatorio)
+  const validateContactInfo = useCallback((data) => {
+    if (!data) return false;
+    
+    const { nombres, apellidoPaterno, apellidoMaterno, email, telefono } = data;
+    
+    // Validación de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const isEmailValid = email && emailRegex.test(email);
+    
+    // Validación de teléfono (WhatsApp) - OBLIGATORIO para contactInfo
+    const phoneRegex = /^\+52\d{10}$/;
+    const isPhoneValid = telefono && phoneRegex.test(telefono);
+    
+    return !!(
+      nombres && 
+      apellidoPaterno && 
+      apellidoMaterno && 
+      isEmailValid && 
+      isPhoneValid
+    );
+  }, []);
+
+  // Validar todas las secciones cuando cambien los datos
+  useEffect(() => {
+    // No validar durante la copia para evitar bucles
+    if (isCopying) return;
+
+    const newValidSections = {
+      contactInfo: validateContactInfo(formData.contactInfo),
+      titularAsegurado: validateContactData(formData.personsInvolved?.titularAsegurado),
+      aseguradoAfectado: validateContactData(formData.personsInvolved?.aseguradoAfectado),
+      titularCuenta: showTitularCuenta ? validateContactData(formData.personsInvolved?.titularCuenta) : true
+    };
+
+    // Solo actualizar si hay cambios reales
+    const hasChanges = Object.keys(newValidSections).some(
+      key => newValidSections[key] !== validSections[key]
+    );
+
+    if (hasChanges) {
+      setValidSections(newValidSections);
+    }
+  }, [
+    formData.contactInfo,
+    formData.personsInvolved,
+    showTitularCuenta,
+    validateContactData,
+    validateContactInfo,
+    isCopying,
+    validSections
+  ]);
+
   // Manejar cambios en el formulario de contacto
-  const handleContactFormChange = (type, data, isValid) => {
+  const handleContactFormChange = useCallback((type, data, isValid) => {
+    // No procesar cambios durante la copia
+    if (isCopying) return;
+
     if (type === 'contactInfo') {
       updateFormData('contactInfo', data);
     } else {
-      const updatedPersonsInvolved = {
-        ...formData.personsInvolved || {},
-        [type]: data
+      const updatedPersonsInvolved = { 
+        ...formData.personsInvolved || {}, 
+        [type]: data 
       };
       updateFormData('personsInvolved', updatedPersonsInvolved);
     }
-
-    // Actualizar estado de validación
-    setValidSections(prev => ({
-      ...prev,
-      [type]: isValid
+    
+    // Actualizar estado de validación inmediatamente
+    setValidSections(prev => ({ 
+      ...prev, 
+      [type]: isValid 
     }));
-  };
+  }, [formData.personsInvolved, updateFormData, isCopying]);
 
-  // Inicializar validaciones al montar el componente
-  useEffect(() => {
-    // Esta inicialización se hará automáticamente 
-    // cuando los componentes ContactForm validen sus datos
-  }, []);
+  // Función para copiar datos del contacto a otro formulario
+  const copyContactData = useCallback((targetType) => {
+    if (!formData.contactInfo) return;
+
+    // Activar flag de copia
+    setIsCopying(true);
+
+    // Crear una copia de los datos del contacto
+    const copiedData = { ...formData.contactInfo };
+    
+    // Actualizar los datos
+    const updatedPersonsInvolved = { 
+      ...formData.personsInvolved || {},
+      [targetType]: copiedData
+    };
+    
+    updateFormData('personsInvolved', updatedPersonsInvolved);
+    
+    // Actualizar validación para el campo copiado
+    const isValid = validateContactData(copiedData);
+    setValidSections(prev => ({ 
+      ...prev, 
+      [targetType]: isValid 
+    }));
+
+    // Desactivar flag de copia después de un breve delay
+    setTimeout(() => {
+      setIsCopying(false);
+    }, 100);
+  }, [formData.contactInfo, formData.personsInvolved, updateFormData, validateContactData]);
 
   // Calcular progreso general
   const totalSections = showTitularCuenta ? 4 : 3;
@@ -51,7 +158,6 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
     aseguradoAfectado: validSections.aseguradoAfectado,
     titularCuenta: showTitularCuenta ? validSections.titularCuenta : true
   }).filter(Boolean).length;
-  
   const progress = (completedSections / totalSections) * 100;
 
   return (
@@ -87,53 +193,126 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
           </span>
         </div>
         <div className="w-full bg-gray-200 rounded-full h-2">
-          <div 
+          <div
             className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-            style={{ width: `${progress}%` }} 
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Información de contacto */}
+      <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-1">
+        <div className="bg-white rounded-lg">
+          <ContactForm
+            title="Información de Contacto"
+            description="Persona que reporta el reclamo"
+            initialData={formData.contactInfo || {}}
+            onDataChange={(data, isValid) => handleContactFormChange('contactInfo', data, isValid)}
           />
         </div>
       </div>
 
       {/* Formularios de personas */}
-      <ContactForm 
-        title="Información de Contacto"
-        description="Persona que reporta el reclamo"
-        initialData={formData.contactInfo || {}}
-        onDataChange={(data, isValid) => handleContactFormChange('contactInfo', data, isValid)}
-      />
+      <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-1">
+        <div className="bg-white rounded-lg">
+          <div className="flex justify-between items-center px-6 pt-6">
+            <h3 className="font-medium text-lg">Asegurado Titular</h3>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => copyContactData('titularAsegurado')}
+              disabled={isCopying}
+              className={`flex items-center gap-2 font-medium transition-colors ${
+                isCopying 
+                  ? 'text-gray-400 cursor-not-allowed' 
+                  : 'text-blue-600 hover:text-blue-800'
+              }`}
+            >
+              <SafeIcon icon={FiCopy} className="text-sm" />
+              Copiar datos del contacto
+            </motion.button>
+          </div>
+          <div className="px-6 pb-6">
+            <ContactForm
+              title=""
+              description="Titular de la póliza"
+              initialData={formData.personsInvolved?.titularAsegurado || {}}
+              onDataChange={(data, isValid) => handleContactFormChange('titularAsegurado', data, isValid)}
+              showValidation={true}
+              whatsappOptional={true}
+              hideHeader={true}
+            />
+          </div>
+        </div>
+      </div>
 
-      <ContactForm 
-        title="Asegurado Titular"
-        description="Titular de la póliza"
-        initialData={formData.personsInvolved?.titularAsegurado || {}}
-        onDataChange={(data, isValid) => handleContactFormChange('titularAsegurado', data, isValid)}
-      />
-
-      <ContactForm 
-        title="Asegurado Afectado"
-        description="Persona que requiere atención"
-        initialData={formData.personsInvolved?.aseguradoAfectado || {}}
-        onDataChange={(data, isValid) => handleContactFormChange('aseguradoAfectado', data, isValid)}
-      />
+      <div className="bg-gradient-to-r from-green-50 to-green-100 rounded-lg p-1">
+        <div className="bg-white rounded-lg">
+          <div className="flex justify-between items-center px-6 pt-6">
+            <h3 className="font-medium text-lg">Asegurado Afectado</h3>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => copyContactData('aseguradoAfectado')}
+              disabled={isCopying}
+              className={`flex items-center gap-2 font-medium transition-colors ${
+                isCopying 
+                  ? 'text-gray-400 cursor-not-allowed' 
+                  : 'text-green-600 hover:text-green-800'
+              }`}
+            >
+              <SafeIcon icon={FiCopy} className="text-sm" />
+              Copiar datos del contacto
+            </motion.button>
+          </div>
+          <div className="px-6 pb-6">
+            <ContactForm
+              title=""
+              description="Persona que requiere atención"
+              initialData={formData.personsInvolved?.aseguradoAfectado || {}}
+              onDataChange={(data, isValid) => handleContactFormChange('aseguradoAfectado', data, isValid)}
+              showValidation={true}
+              whatsappOptional={true}
+              hideHeader={true}
+            />
+          </div>
+        </div>
+      </div>
 
       {showTitularCuenta && (
-        <ContactForm 
-          title="Titular de Cuenta Bancaria"
-          description="Para reembolsos"
-          initialData={formData.personsInvolved?.titularCuenta || {}}
-          onDataChange={(data, isValid) => handleContactFormChange('titularCuenta', data, isValid)}
-        />
+        <div className="bg-gradient-to-r from-purple-50 to-purple-100 rounded-lg p-1">
+          <div className="bg-white rounded-lg">
+            <div className="flex justify-between items-center px-6 pt-6">
+              <h3 className="font-medium text-lg">Titular de Cuenta Bancaria</h3>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => copyContactData('titularCuenta')}
+                disabled={isCopying}
+                className={`flex items-center gap-2 font-medium transition-colors ${
+                  isCopying 
+                    ? 'text-gray-400 cursor-not-allowed' 
+                    : 'text-purple-600 hover:text-purple-800'
+                }`}
+              >
+                <SafeIcon icon={FiCopy} className="text-sm" />
+                Copiar datos del contacto
+              </motion.button>
+            </div>
+            <div className="px-6 pb-6">
+              <ContactForm
+                title=""
+                description="Para reembolsos"
+                initialData={formData.personsInvolved?.titularCuenta || {}}
+                onDataChange={(data, isValid) => handleContactFormChange('titularCuenta', data, isValid)}
+                showValidation={true}
+                whatsappOptional={true}
+                hideHeader={true}
+              />
+            </div>
+          </div>
+        </div>
       )}
-
-      {/* Botón para agregar persona adicional (opcional) */}
-      <motion.button
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
-        className="flex items-center justify-center gap-2 w-full py-3 px-4 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700 transition-colors"
-      >
-        <SafeIcon icon={FiUserPlus} className="text-gray-600" />
-        <span>Agregar otra persona</span>
-      </motion.button>
     </motion.div>
   );
 };
