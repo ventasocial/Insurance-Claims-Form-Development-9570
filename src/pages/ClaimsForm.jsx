@@ -10,6 +10,7 @@ import SinisterDescription from '../components/form-steps/SinisterDescription';
 import ProgrammingDetails from '../components/form-steps/ProgrammingDetails';
 import PersonsInvolved from '../components/form-steps/PersonsInvolved';
 import DocumentsSection from '../components/form-steps/DocumentsSection';
+import TermsAndConditions from '../components/form-steps/TermsAndConditions';
 import FormProgress from '../components/FormProgress';
 import FormNavigation from '../components/FormNavigation';
 import SafeIcon from '../common/SafeIcon';
@@ -33,13 +34,15 @@ const ClaimsForm = () => {
     serviceTypes: [],
     sinisterDescription: '',
     programmingService: '',
-    surgeryType: '',
+    isCirugiaOrtopedica: undefined,
     personsInvolved: {
       titularAsegurado: {},
       aseguradoAfectado: {},
       titularCuenta: {}
     },
-    documents: {}
+    documents: {},
+    acceptedTerms: false,
+    acceptedPrivacy: false
   });
 
   // Parse URL parameters for specific document fields
@@ -61,27 +64,68 @@ const ClaimsForm = () => {
 
   const getSteps = () => {
     const baseSteps = [
-      { id: 'contact', title: 'Información de Contacto', component: ContactInfo },
-      { id: 'insurance', title: 'Aseguradora', component: InsuranceCompany },
-      { id: 'claimType', title: 'Tipo de Reclamo', component: ClaimType }
+      {
+        id: 'contact',
+        title: 'Información de Contacto',
+        component: ContactInfo
+      },
+      {
+        id: 'insurance',
+        title: 'Aseguradora',
+        component: InsuranceCompany
+      },
+      {
+        id: 'claimType',
+        title: 'Tipo de Reclamo',
+        component: ClaimType
+      }
     ];
 
     if (formData.claimType === 'reembolso') {
       baseSteps.push(
-        { id: 'reimbursement', title: 'Detalles del Reembolso', component: ReimbursementDetails },
-        { id: 'services', title: 'Tipos de Servicio', component: ServiceTypes },
-        { id: 'description', title: 'Descripción del Siniestro', component: SinisterDescription }
+        {
+          id: 'reimbursement',
+          title: 'Detalles del Reembolso',
+          component: ReimbursementDetails
+        },
+        {
+          id: 'services',
+          title: 'Tipos de Servicio',
+          component: ServiceTypes
+        },
+        {
+          id: 'description',
+          title: 'Descripción del Siniestro',
+          component: SinisterDescription
+        }
       );
     } else if (formData.claimType === 'programacion') {
       baseSteps.push(
-        { id: 'programming', title: 'Detalles de Programación', component: ProgrammingDetails }
+        {
+          id: 'programming',
+          title: 'Detalles de Programación',
+          component: ProgrammingDetails
+        }
       );
     }
 
     if (formData.claimType && formData.claimType !== 'maternidad') {
       baseSteps.push(
-        { id: 'persons', title: 'Personas Involucradas', component: PersonsInvolved },
-        { id: 'documents', title: 'Documentos', component: DocumentsSection }
+        {
+          id: 'persons',
+          title: 'Personas Involucradas',
+          component: PersonsInvolved
+        },
+        {
+          id: 'documents',
+          title: 'Documentos',
+          component: DocumentsSection
+        },
+        {
+          id: 'terms',
+          title: 'Términos y Condiciones',
+          component: TermsAndConditions
+        }
       );
     }
 
@@ -94,11 +138,7 @@ const ClaimsForm = () => {
   const canProceed = () => {
     switch (currentStepData?.id) {
       case 'contact':
-        return formData.contactInfo.nombres && 
-               formData.contactInfo.apellidoPaterno && 
-               formData.contactInfo.apellidoMaterno && 
-               formData.contactInfo.email && 
-               formData.contactInfo.telefono;
+        return formData.contactInfo.nombres && formData.contactInfo.apellidoPaterno && formData.contactInfo.apellidoMaterno && formData.contactInfo.email && formData.contactInfo.telefono;
       case 'insurance':
         return formData.insuranceCompany;
       case 'claimType':
@@ -110,11 +150,16 @@ const ClaimsForm = () => {
       case 'description':
         return formData.sinisterDescription.trim().length > 10;
       case 'programming':
-        return formData.programmingService;
+        return formData.programmingService && 
+          (formData.programmingService !== 'cirugia' || 
+           formData.insuranceCompany !== 'gnp' || 
+           formData.isCirugiaOrtopedica !== undefined);
       case 'persons':
         // Check if at least titular asegurado has required fields
         const titular = formData.personsInvolved.titularAsegurado || {};
         return titular.nombres && titular.apellidoPaterno && titular.apellidoMaterno && titular.email && titular.telefono;
+      case 'terms':
+        return formData.acceptedTerms && formData.acceptedPrivacy;
       default:
         return true;
     }
@@ -151,12 +196,14 @@ const ClaimsForm = () => {
         tipos_servicio: formData.serviceTypes || [],
         descripcion_siniestro: formData.sinisterDescription || null,
         servicio_programacion: formData.programmingService || null,
-        tipo_cirugia: formData.surgeryType || null,
+        tipo_cirugia: formData.isCirugiaOrtopedica ? 'traumatologia_ortopedia_neurologia' : null,
         titular_asegurado: formData.personsInvolved.titularAsegurado || null,
         asegurado_afectado: formData.personsInvolved.aseguradoAfectado || null,
         titular_cuenta: formData.personsInvolved.titularCuenta || null,
         documentos: formData.documents || {},
         estado: 'Enviado',
+        aceptacion_terminos: formData.acceptedTerms,
+        aceptacion_privacidad: formData.acceptedPrivacy
       };
 
       // Guardar en Supabase
@@ -168,10 +215,17 @@ const ClaimsForm = () => {
       if (error) {
         throw error;
       }
-
+      
       console.log('Reclamo enviado exitosamente:', data);
-      alert('Formulario enviado exitosamente. Recibirás una confirmación por correo electrónico.');
-      navigate('/');
+      
+      // Navegar a la página de agradecimiento con los datos del reclamo
+      navigate('/thank-you', { 
+        state: { 
+          formData: formData,
+          submissionId: data[0].id 
+        } 
+      });
+      
     } catch (error) {
       console.error('Error al enviar el reclamo:', error);
       setSubmitError('Hubo un error al enviar el formulario. Por favor intenta de nuevo.');
@@ -212,8 +266,8 @@ const ClaimsForm = () => {
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Progress Bar */}
-        <FormProgress 
-          currentStep={currentStep} 
+        <FormProgress
+          currentStep={currentStep}
           totalSteps={steps.length}
           steps={steps}
         />

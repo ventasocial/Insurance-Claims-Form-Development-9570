@@ -188,7 +188,7 @@ const LandingPage = () => {
                 className="relative"
               >
                 <div className="bg-white p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow">
-                  <div className="text-3xl font-bold text-[#204499] mb-3">
+                  <div className="text-3xl font-bold text-[#204499] mb-3 flex items-start">
                     {step.number}
                   </div>
                   <h3 className="text-xl font-semibold text-gray-900 mb-2">
@@ -281,7 +281,7 @@ const LandingPage = () => {
       {/* Footer */}
       <footer className="bg-gray-900 text-white py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row items-center justify-between">
+          <div className="flex flex-col md:flex-row items-center justify-between mb-8">
             <div className="flex items-center gap-4 mb-4 md:mb-0">
               <img 
                 src="https://storage.googleapis.com/msgsndr/HWRXLf7lstECUAG07eRw/media/685d77c08f84bd3c493ed246.png"
@@ -294,6 +294,27 @@ const LandingPage = () => {
               <SafeIcon icon={FiMail} className="text-lg" />
               <span>contacto@fortex.com</span>
             </div>
+          </div>
+          
+          <div className="border-t border-gray-800 pt-6 flex flex-wrap justify-center md:justify-between items-center gap-4">
+            <div className="flex flex-wrap justify-center gap-6 text-sm">
+              <a href="/terms" className="text-gray-400 hover:text-white transition-colors">
+                Términos y Condiciones
+              </a>
+              <a href="/privacy" className="text-gray-400 hover:text-white transition-colors">
+                Política de Privacidad
+              </a>
+            </div>
+            <a 
+              href="/admin" 
+              className="text-gray-400 hover:text-white text-sm transition-colors"
+              onClick={(e) => {
+                e.preventDefault();
+                navigate('/admin');
+              }}
+            >
+              Panel de Administrador
+            </a>
           </div>
         </div>
       </footer>

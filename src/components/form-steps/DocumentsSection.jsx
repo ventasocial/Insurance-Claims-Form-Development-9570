@@ -14,7 +14,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
     if (!newFiles[documentType]) {
       newFiles[documentType] = [];
     }
-    
+
     Array.from(files).forEach(file => {
       newFiles[documentType].push({
         name: file.name,
@@ -24,7 +24,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
         file: file
       });
     });
-    
+
     setUploadedFiles(newFiles);
     updateFormData('documents', newFiles);
   };
@@ -62,10 +62,8 @@ const DocumentsSection = ({ formData, updateFormData }) => {
         title: 'Informe Médico',
         description: 'Informe médico detallado para programación'
       });
-
-      if (formData.programmingService === 'cirugia' && 
-          formData.insuranceCompany === 'gnp' && 
-          ['traumatologia', 'ortopedia', 'neurologia'].includes(formData.surgeryType)) {
+      
+      if (formData.programmingService === 'cirugia' && formData.insuranceCompany === 'gnp' && formData.isCirugiaOrtopedica === true) {
         requirements.sinisterDocs.push({
           id: 'formato-cirugia',
           title: 'Formato de Programación de Cirugía',
@@ -214,7 +212,6 @@ const DocumentsSection = ({ formData, updateFormData }) => {
 
   const FileList = ({ documentType }) => {
     const files = uploadedFiles[documentType] || [];
-    
     if (files.length === 0) {
       return (
         <div className="text-center py-8 text-gray-500">

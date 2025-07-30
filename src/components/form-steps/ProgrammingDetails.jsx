@@ -27,24 +27,18 @@ const ProgrammingDetails = ({ formData, updateFormData }) => {
     }
   ];
 
-  const surgeryTypes = [
-    { id: 'traumatologia', title: 'Traumatología' },
-    { id: 'ortopedia', title: 'Ortopedia' },
-    { id: 'neurologia', title: 'Neurología' }
-  ];
-
   const handleServiceChange = (serviceId) => {
     updateFormData('programmingService', serviceId);
     if (serviceId !== 'cirugia') {
-      updateFormData('surgeryType', '');
+      updateFormData('isCirugiaOrtopedica', false);
     }
   };
 
-  const handleSurgeryTypeChange = (surgeryType) => {
-    updateFormData('surgeryType', surgeryType);
+  const handleCirugiaTypeChange = (isOrtopedica) => {
+    updateFormData('isCirugiaOrtopedica', isOrtopedica);
   };
 
-  const showSurgeryTypes = formData.programmingService === 'cirugia' && formData.insuranceCompany === 'gnp';
+  const showCirugiaTypes = formData.programmingService === 'cirugia' && formData.insuranceCompany === 'gnp';
 
   return (
     <motion.div
@@ -80,11 +74,13 @@ const ProgrammingDetails = ({ formData, updateFormData }) => {
                 }`}
               >
                 <div className="flex flex-col items-center space-y-3">
-                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                    formData.programmingService === service.id
-                      ? 'bg-[#204499] text-white'
-                      : 'bg-gray-100 text-gray-400'
-                  }`}>
+                  <div
+                    className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                      formData.programmingService === service.id
+                        ? 'bg-[#204499] text-white'
+                        : 'bg-gray-100 text-gray-400'
+                    }`}
+                  >
                     <SafeIcon icon={service.icon} className="text-2xl" />
                   </div>
                   <div className="text-center">
@@ -101,7 +97,7 @@ const ProgrammingDetails = ({ formData, updateFormData }) => {
           </div>
         </div>
 
-        {showSurgeryTypes && (
+        {showCirugiaTypes && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
@@ -111,25 +107,34 @@ const ProgrammingDetails = ({ formData, updateFormData }) => {
             <label className="block text-sm font-medium text-gray-700">
               Tipo de Cirugía (GNP) *
             </label>
-            <div className="grid md:grid-cols-3 gap-4">
-              {surgeryTypes.map((surgery) => (
-                <motion.button
-                  key={surgery.id}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => handleSurgeryTypeChange(surgery.id)}
-                  className={`p-4 rounded-lg border-2 transition-all duration-300 ${
-                    formData.surgeryType === surgery.id
-                      ? 'border-[#204499] bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <span className="font-medium">{surgery.title}</span>
-                </motion.button>
-              ))}
+            <div className="grid md:grid-cols-2 gap-4">
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => handleCirugiaTypeChange(true)}
+                className={`p-4 rounded-lg border-2 transition-all duration-300 ${
+                  formData.isCirugiaOrtopedica === true
+                    ? 'border-[#204499] bg-blue-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <span className="font-medium">Traumatología, Ortopedia y Neurología</span>
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => handleCirugiaTypeChange(false)}
+                className={`p-4 rounded-lg border-2 transition-all duration-300 ${
+                  formData.isCirugiaOrtopedica === false
+                    ? 'border-[#204499] bg-blue-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <span className="font-medium">Otro tipo de cirugía</span>
+              </motion.button>
             </div>
             <p className="text-sm text-gray-500">
-              Selecciona el tipo de cirugía si aplica para tu caso con GNP
+              Especifica si tu cirugía con GNP es de Traumatología, Ortopedia y Neurología u otro tipo
             </p>
           </motion.div>
         )}
@@ -143,9 +148,11 @@ const ProgrammingDetails = ({ formData, updateFormData }) => {
             <p className="text-green-800 font-medium">
               Servicio seleccionado: {programmingServices.find(s => s.id === formData.programmingService)?.title}
             </p>
-            {showSurgeryTypes && formData.surgeryType && (
+            {showCirugiaTypes && formData.isCirugiaOrtopedica !== undefined && (
               <p className="text-green-600 text-sm mt-1">
-                Tipo de cirugía: {surgeryTypes.find(s => s.id === formData.surgeryType)?.title}
+                Tipo de cirugía: {formData.isCirugiaOrtopedica 
+                  ? "Traumatología, Ortopedia y Neurología" 
+                  : "Otro tipo de cirugía"}
               </p>
             )}
           </motion.div>

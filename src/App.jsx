@@ -4,6 +4,9 @@ import LandingPage from './pages/LandingPage';
 import ClaimsForm from './pages/ClaimsForm';
 import AdminDashboard from './pages/AdminDashboard';
 import LoginPage from './pages/LoginPage';
+import ThankYouPage from './pages/ThankYouPage';
+import TermsPage from './pages/TermsPage';
+import PrivacyPage from './pages/PrivacyPage';
 import supabase from './lib/supabase';
 import './App.css';
 
@@ -48,15 +51,17 @@ function App() {
   // Ruta protegida para administradores
   const ProtectedRoute = ({ children }) => {
     if (loading) {
-      return <div className="flex items-center justify-center h-screen">
-        <div className="animate-spin w-10 h-10 border-4 border-[#204499] border-t-transparent rounded-full"></div>
-      </div>;
+      return (
+        <div className="flex items-center justify-center h-screen">
+          <div className="animate-spin w-10 h-10 border-4 border-[#204499] border-t-transparent rounded-full"></div>
+        </div>
+      );
     }
-    
+
     if (!user) {
       return <Navigate to="/login" />;
     }
-    
+
     return children;
   };
 
@@ -67,11 +72,17 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/form" element={<ClaimsForm />} />
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/admin" element={
-            <ProtectedRoute>
-              <AdminDashboard />
-            </ProtectedRoute>
-          } />
+          <Route path="/thank-you" element={<ThankYouPage />} />
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute>
+                <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
         </Routes>
       </div>
     </Router>
