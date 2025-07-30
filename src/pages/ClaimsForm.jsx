@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
+
 import InsuranceCompany from '../components/form-steps/InsuranceCompany';
 import ClaimType from '../components/form-steps/ClaimType';
 import ReimbursementDetails from '../components/form-steps/ReimbursementDetails';
@@ -11,12 +12,14 @@ import DocumentChecklist from '../components/form-steps/DocumentChecklist';
 import SinisterDescription from '../components/form-steps/SinisterDescription';
 import DocumentsSection from '../components/form-steps/DocumentsSection';
 import TermsAndConditions from '../components/form-steps/TermsAndConditions';
+
 import FormProgress from '../components/FormProgress';
 import FormNavigation from '../components/FormNavigation';
 import Breadcrumb from '../components/Breadcrumb';
 import FormHeader from '../components/FormHeader';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
+
 import supabase from '../lib/supabase';
 import { getFormDataFromMagicLink, updateMagicLinkFormData } from '../lib/magicLink';
 import WebhookService from '../lib/webhookService';
@@ -184,44 +187,63 @@ const ClaimsForm = () => {
     switch (currentStepData?.id) {
       case 'insurance':
         return formData.insuranceCompany;
+
       case 'claimType':
         return formData.claimType;
+
       case 'reimbursement':
         return formData.reimbursementType && (formData.reimbursementType === 'inicial' || formData.claimNumber);
+
       case 'services':
         return formData.serviceTypes.length > 0;
+
       case 'programming':
-        return formData.programmingService && (formData.programmingService !== 'cirugia' || formData.insuranceCompany !== 'gnp' || formData.isCirugiaOrtopedica !== undefined);
+        return formData.programmingService && 
+               (formData.programmingService !== 'cirugia' || 
+                formData.insuranceCompany !== 'gnp' || 
+                formData.isCirugiaOrtopedica !== undefined);
+
       case 'checklist':
         // Verificar que al menos los documentos requeridos estén marcados y se haya seleccionado una opción de firma
         const requiredDocs = getRequiredDocuments();
         // Si la opción de firma es por email, no verificar los documentos que requieren firma
-        const docsToCheck = formData.signatureDocumentOption === 'email'
-          ? requiredDocs.filter(doc => !doc.needsSignature)
+        const docsToCheck = formData.signatureDocumentOption === 'email' 
+          ? requiredDocs.filter(doc => !doc.needsSignature) 
           : requiredDocs;
+        
         return docsToCheck.every(doc => formData.documentChecklist && formData.documentChecklist[doc.id]) &&
-          formData.signatureDocumentOption !== undefined &&
-          formData.signatureDocumentOption !== '';
+               formData.signatureDocumentOption !== undefined && 
+               formData.signatureDocumentOption !== '';
+
       case 'persons':
         // Verificar que la información de contacto esté completa
         const contactInfo = formData.contactInfo;
-        const contactValid = contactInfo && contactInfo.nombres && contactInfo.apellidoPaterno && contactInfo.apellidoMaterno &&
-          contactInfo.email && validateEmail(contactInfo.email) &&
-          contactInfo.telefono && validateWhatsApp(contactInfo.telefono);
+        const contactValid = contactInfo && 
+                            contactInfo.nombres && 
+                            contactInfo.apellidoPaterno && 
+                            contactInfo.apellidoMaterno && 
+                            contactInfo.email && 
+                            validateEmail(contactInfo.email) && 
+                            contactInfo.telefono && 
+                            validateWhatsApp(contactInfo.telefono);
 
         // Verificar que al menos el titular del seguro tenga la información completa
         const titular = formData.personsInvolved.titularAsegurado || {};
-        const titularValid = titular.nombres && titular.apellidoPaterno && titular.apellidoMaterno &&
-          titular.email && validateEmail(titular.email);
-        
+        const titularValid = titular.nombres && 
+                           titular.apellidoPaterno && 
+                           titular.apellidoMaterno && 
+                           titular.email && 
+                           validateEmail(titular.email);
         // WhatsApp es opcional para titular
         const titularPhoneValid = !titular.telefono || validateWhatsApp(titular.telefono);
 
         // Verificar el asegurado afectado
         const afectado = formData.personsInvolved.aseguradoAfectado || {};
-        const afectadoValid = afectado.nombres && afectado.apellidoPaterno && afectado.apellidoMaterno &&
-          afectado.email && validateEmail(afectado.email);
-        
+        const afectadoValid = afectado.nombres && 
+                            afectado.apellidoPaterno && 
+                            afectado.apellidoMaterno && 
+                            afectado.email && 
+                            validateEmail(afectado.email);
         // WhatsApp es opcional para afectado
         const afectadoPhoneValid = !afectado.telefono || validateWhatsApp(afectado.telefono);
 
@@ -229,23 +251,29 @@ const ClaimsForm = () => {
         let cuentaValid = true;
         if (formData.claimType === 'reembolso') {
           const cuenta = formData.personsInvolved.titularCuenta || {};
-          cuentaValid = cuenta.nombres && cuenta.apellidoPaterno && cuenta.apellidoMaterno &&
-            cuenta.email && validateEmail(cuenta.email);
-          
+          cuentaValid = cuenta.nombres && 
+                       cuenta.apellidoPaterno && 
+                       cuenta.apellidoMaterno && 
+                       cuenta.email && 
+                       validateEmail(cuenta.email);
           // WhatsApp es opcional para titular de cuenta
           const cuentaPhoneValid = !cuenta.telefono || validateWhatsApp(cuenta.telefono);
           cuentaValid = cuentaValid && cuentaPhoneValid;
         }
 
         return contactValid && titularValid && titularPhoneValid && afectadoValid && afectadoPhoneValid && cuentaValid;
+
       case 'description':
         return formData.sinisterDescription && formData.sinisterDescription.trim().length > 10;
+
       case 'documents':
         // Verificar que el informe médico esté presente
         const documents = formData.documents || {};
         return documents['informe-medico'] && documents['informe-medico'].length > 0;
+
       case 'terms':
         return formData.acceptedTerms && formData.acceptedPrivacy;
+
       default:
         return true;
     }
@@ -479,6 +507,8 @@ const ClaimsForm = () => {
     setSubmitError(null);
 
     try {
+      console.log('Iniciando envío del formulario...');
+      
       // Preparar los datos para enviar a Supabase
       const reclamacionData = {
         contacto_nombres: formData.contactInfo.nombres,
@@ -522,11 +552,12 @@ const ClaimsForm = () => {
       console.log('Reclamo enviado exitosamente:', data);
 
       // Subir documentos al storage de Supabase
-      const uploadPromises = [];
       const submissionId = data[0].id;
 
       // Primero subimos los documentos al bucket de Storage
       if (formData.documents && Object.keys(formData.documents).length > 0) {
+        console.log('Subiendo documentos al storage...');
+        
         for (const docType in formData.documents) {
           if (Array.isArray(formData.documents[docType])) {
             for (const doc of formData.documents[docType]) {
@@ -538,7 +569,7 @@ const ClaimsForm = () => {
                     cacheControl: '3600',
                     upsert: false
                   });
-                
+
                 if (uploadError) {
                   console.error(`Error uploading file ${doc.name}:`, uploadError);
                 }
@@ -550,7 +581,11 @@ const ClaimsForm = () => {
 
       // Disparar webhooks después de guardar exitosamente
       try {
+        console.log('Preparando datos para webhooks...');
         const webhookData = await WebhookService.transformFormDataForWebhook(formData, data[0].id);
+        console.log('Datos preparados para webhook:', webhookData);
+        
+        console.log('Disparando webhooks...');
         await WebhookService.triggerWebhooks('form_submitted', webhookData);
         console.log('Webhooks disparados exitosamente');
       } catch (webhookError) {
@@ -596,11 +631,7 @@ const ClaimsForm = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Header */}
-      <FormHeader
-        currentStep={currentStep}
-        totalSteps={steps.length}
-        formData={formData}
-      />
+      <FormHeader currentStep={currentStep} totalSteps={steps.length} formData={formData} />
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Session error message */}
@@ -622,11 +653,7 @@ const ClaimsForm = () => {
         <Breadcrumb formData={formData} />
 
         {/* Progress Bar */}
-        <FormProgress
-          currentStep={currentStep}
-          totalSteps={steps.length}
-          steps={steps}
-        />
+        <FormProgress currentStep={currentStep} totalSteps={steps.length} steps={steps} />
 
         {/* Form Content */}
         <motion.div
@@ -657,10 +684,7 @@ const ClaimsForm = () => {
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ duration: 0.3 }}
               >
-                <CurrentStepComponent
-                  formData={formData}
-                  updateFormData={updateFormData}
-                />
+                <CurrentStepComponent formData={formData} updateFormData={updateFormData} />
               </motion.div>
             )}
           </AnimatePresence>

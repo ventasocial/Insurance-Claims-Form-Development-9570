@@ -3,8 +3,9 @@ import { motion } from 'framer-motion';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 import supabase from '../lib/supabase';
+import WebhookService from '../lib/webhookService';
 
-const { FiLink, FiPlus, FiEdit, FiTrash2, FiToggleLeft, FiToggleRight, FiSave, FiX, FiCheck, FiAlertCircle, FiSettings, FiZap, FiClock, FiList } = FiIcons;
+const { FiLink, FiPlus, FiEdit, FiTrash2, FiToggleLeft, FiToggleRight, FiSave, FiX, FiCheck, FiAlertCircle, FiSettings, FiZap, FiClock, FiList, FiRefreshCw, FiFilter, FiEye } = FiIcons;
 
 const WebhookManager = () => {
   const [webhooks, setWebhooks] = useState([]);
@@ -16,6 +17,14 @@ const WebhookManager = () => {
   const [showLogs, setShowLogs] = useState(false);
   const [webhookLogs, setWebhookLogs] = useState([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
+  const [selectedWebhookForLogs, setSelectedWebhookForLogs] = useState(null);
+  const [retryingLogs, setRetryingLogs] = useState(new Set());
+  const [logFilters, setLogFilters] = useState({
+    success: 'all',
+    event: 'all',
+    dateFrom: '',
+    dateTo: ''
+  });
 
   // Form state
   const [formData, setFormData] = useState({
@@ -57,13 +66,37 @@ const WebhookManager = () => {
 
   const fetchWebhookLogs = async (webhookId) => {
     setLoadingLogs(true);
+    setSelectedWebhookForLogs(webhookId);
+    
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('webhook_logs_r2x4')
         .select('*')
-        .eq('webhook_id', webhookId)
         .order('sent_at', { ascending: false })
-        .limit(20);
+        .limit(50);
+
+      if (webhookId) {
+        query = query.eq('webhook_id', webhookId);
+      }
+
+      // Aplicar filtros
+      if (logFilters.success !== 'all') {
+        query = query.eq('success', logFilters.success === 'success');
+      }
+
+      if (logFilters.event !== 'all') {
+        query = query.eq('event', logFilters.event);
+      }
+
+      if (logFilters.dateFrom) {
+        query = query.gte('sent_at', logFilters.dateFrom);
+      }
+
+      if (logFilters.dateTo) {
+        query = query.lte('sent_at', logFilters.dateTo + 'T23:59:59');
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setWebhookLogs(data || []);
@@ -76,10 +109,39 @@ const WebhookManager = () => {
     }
   };
 
+  const handleRetryWebhook = async (logId) => {
+    setRetryingLogs(prev => new Set([...prev, logId]));
+    
+    try {
+      const result = await WebhookService.manualRetry(logId);
+      
+      if (result.success) {
+        alert('Reintento de webhook iniciado correctamente');
+        // Refrescar logs después de un breve delay
+        setTimeout(() => {
+          if (selectedWebhookForLogs) {
+            fetchWebhookLogs(selectedWebhookForLogs);
+          }
+        }, 2000);
+      } else {
+        alert(`Error al reintentar webhook: ${result.message}`);
+      }
+    } catch (error) {
+      console.error('Error retrying webhook:', error);
+      alert('Error al reintentar el webhook');
+    } finally {
+      setRetryingLogs(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(logId);
+        return newSet;
+      });
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-
+    
     try {
       const webhookData = {
         ...formData,
@@ -149,7 +211,6 @@ const WebhookManager = () => {
         .eq('id', webhookId);
 
       if (error) throw error;
-      
       await fetchWebhooks();
       alert('Webhook eliminado correctamente');
     } catch (err) {
@@ -166,7 +227,6 @@ const WebhookManager = () => {
         .eq('id', webhook.id);
 
       if (error) throw error;
-      
       await fetchWebhooks();
     } catch (err) {
       console.error('Error toggling webhook:', err);
@@ -250,6 +310,7 @@ const WebhookManager = () => {
       const headers = {
         'Content-Type': 'application/json',
         'User-Agent': 'Fortex-Webhook/1.0',
+        'X-Webhook-Test': 'true',
         ...JSON.parse(webhook.headers || '{}')
       };
 
@@ -266,7 +327,9 @@ const WebhookManager = () => {
         status_code: response.status,
         success: response.ok,
         response_body: response.ok ? null : await response.text(),
-        sent_at: new Date().toISOString()
+        payload: JSON.stringify(testData),
+        sent_at: new Date().toISOString(),
+        retry_count: 0
       };
 
       // Guardar log en la base de datos
@@ -290,10 +353,7 @@ const WebhookManager = () => {
   const handleHeaderChange = (key, value) => {
     setFormData(prev => ({
       ...prev,
-      headers: {
-        ...prev.headers,
-        [key]: value
-      }
+      headers: { ...prev.headers, [key]: value }
     }));
   };
 
@@ -311,11 +371,23 @@ const WebhookManager = () => {
     setFormData(prev => {
       const newHeaders = { ...prev.headers };
       delete newHeaders[key];
-      return {
-        ...prev,
-        headers: newHeaders
-      };
+      return { ...prev, headers: newHeaders };
     });
+  };
+
+  const getStatusBadge = (log) => {
+    if (log.success) {
+      return <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">Éxito</span>;
+    } else {
+      return <span className="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">Error</span>;
+    }
+  };
+
+  const getRetryBadge = (retryCount) => {
+    if (retryCount > 0) {
+      return <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">Reintento {retryCount}</span>;
+    }
+    return null;
   };
 
   if (loading && webhooks.length === 0) {
@@ -339,16 +411,26 @@ const WebhookManager = () => {
             <p className="text-gray-600">Configura webhooks para integrar con sistemas externos</p>
           </div>
         </div>
-        
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => setShowAddForm(true)}
-          className="bg-[#204499] hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
-        >
-          <SafeIcon icon={FiPlus} className="text-lg" />
-          Nuevo Webhook
-        </motion.button>
+        <div className="flex gap-3">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => fetchWebhookLogs(null)}
+            className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
+          >
+            <SafeIcon icon={FiList} className="text-lg" />
+            Ver Todos los Logs
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowAddForm(true)}
+            className="bg-[#204499] hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
+          >
+            <SafeIcon icon={FiPlus} className="text-lg" />
+            Nuevo Webhook
+          </motion.button>
+        </div>
       </div>
 
       {error && (
@@ -499,7 +581,6 @@ const WebhookManager = () => {
                   + Agregar Header
                 </button>
               </div>
-              
               {Object.keys(formData.headers).length > 0 ? (
                 <div className="space-y-2 bg-gray-50 rounded-lg p-4">
                   {Object.entries(formData.headers).map(([key, value]) => (
@@ -567,9 +648,7 @@ const WebhookManager = () => {
                 whileHover={{ scale: loading ? 1 : 1.05 }}
                 whileTap={{ scale: loading ? 1 : 0.95 }}
                 className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
-                  loading 
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                    : 'bg-[#204499] hover:bg-blue-700 text-white'
+                  loading ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-[#204499] hover:bg-blue-700 text-white'
                 }`}
               >
                 {loading ? (
@@ -591,9 +670,16 @@ const WebhookManager = () => {
           animate={{ opacity: 1 }}
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
         >
-          <div className="bg-white rounded-lg w-full max-w-4xl max-h-[80vh] overflow-auto">
+          <div className="bg-white rounded-lg w-full max-w-6xl max-h-[80vh] overflow-auto">
             <div className="p-4 border-b flex justify-between items-center sticky top-0 bg-white">
-              <h3 className="font-medium text-lg">Historial de Envíos de Webhook</h3>
+              <h3 className="font-medium text-lg">
+                Historial de Envíos de Webhook
+                {selectedWebhookForLogs && (
+                  <span className="text-sm text-gray-500 ml-2">
+                    ({webhooks.find(w => w.id === selectedWebhookForLogs)?.name})
+                  </span>
+                )}
+              </h3>
               <button
                 onClick={() => setShowLogs(false)}
                 className="text-gray-400 hover:text-gray-600 text-2xl"
@@ -601,6 +687,67 @@ const WebhookManager = () => {
                 ×
               </button>
             </div>
+
+            {/* Filtros */}
+            <div className="p-4 border-b bg-gray-50">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <select
+                  value={logFilters.success}
+                  onChange={(e) => setLogFilters(prev => ({ ...prev, success: e.target.value }))}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                >
+                  <option value="all">Todos los estados</option>
+                  <option value="success">Solo éxitos</option>
+                  <option value="error">Solo errores</option>
+                </select>
+
+                <select
+                  value={logFilters.event}
+                  onChange={(e) => setLogFilters(prev => ({ ...prev, event: e.target.value }))}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                >
+                  <option value="all">Todos los eventos</option>
+                  {availableEvents.map(event => (
+                    <option key={event.id} value={event.id}>{event.name}</option>
+                  ))}
+                  <option value="test_webhook">Webhook de Prueba</option>
+                </select>
+
+                <input
+                  type="date"
+                  value={logFilters.dateFrom}
+                  onChange={(e) => setLogFilters(prev => ({ ...prev, dateFrom: e.target.value }))}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  placeholder="Fecha desde"
+                />
+
+                <input
+                  type="date"
+                  value={logFilters.dateTo}
+                  onChange={(e) => setLogFilters(prev => ({ ...prev, dateTo: e.target.value }))}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  placeholder="Fecha hasta"
+                />
+              </div>
+              
+              <div className="flex justify-between items-center mt-4">
+                <button
+                  onClick={() => setLogFilters({ success: 'all', event: 'all', dateFrom: '', dateTo: '' })}
+                  className="text-sm text-gray-600 hover:text-gray-800"
+                >
+                  Limpiar filtros
+                </button>
+                
+                <button
+                  onClick={() => fetchWebhookLogs(selectedWebhookForLogs)}
+                  className="bg-[#204499] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2"
+                >
+                  <SafeIcon icon={FiFilter} className="text-sm" />
+                  Aplicar Filtros
+                </button>
+              </div>
+            </div>
+
             <div className="p-4">
               {loadingLogs ? (
                 <div className="flex items-center justify-center py-12">
@@ -610,34 +757,67 @@ const WebhookManager = () => {
                 <div className="text-center py-8 text-gray-500">
                   <SafeIcon icon={FiClock} className="text-4xl mx-auto mb-4 text-gray-300" />
                   <p className="text-lg font-medium mb-2">No hay registros de envíos</p>
-                  <p className="text-sm">Este webhook aún no ha sido disparado o no hay logs disponibles</p>
+                  <p className="text-sm">No se encontraron logs con los filtros aplicados</p>
                 </div>
               ) : (
                 <div className="space-y-4">
                   {webhookLogs.map(log => (
-                    <div 
-                      key={log.id} 
-                      className={`border rounded-lg p-4 ${log.success ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}
+                    <div
+                      key={log.id}
+                      className={`border rounded-lg p-4 ${
+                        log.success ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
+                      }`}
                     >
                       <div className="flex items-start justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <SafeIcon 
-                            icon={log.success ? FiCheck : FiX} 
-                            className={`${log.success ? 'text-green-600' : 'text-red-600'} text-lg`} 
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <SafeIcon
+                            icon={log.success ? FiCheck : FiX}
+                            className={`${log.success ? 'text-green-600' : 'text-red-600'} text-lg`}
                           />
                           <span className={`font-medium ${log.success ? 'text-green-800' : 'text-red-800'}`}>
-                            {log.event} - {log.success ? 'Éxito' : 'Error'}
+                            {log.event}
                           </span>
+                          {getStatusBadge(log)}
+                          {getRetryBadge(log.retry_count)}
                         </div>
-                        <span className="text-xs text-gray-500">
-                          {new Date(log.sent_at).toLocaleString()}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500">
+                            {new Date(log.sent_at).toLocaleString()}
+                          </span>
+                          {!log.success && (
+                            <motion.button
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
+                              onClick={() => handleRetryWebhook(log.id)}
+                              disabled={retryingLogs.has(log.id)}
+                              className={`p-1 rounded transition-colors ${
+                                retryingLogs.has(log.id)
+                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                  : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                              }`}
+                              title="Reintentar webhook"
+                            >
+                              {retryingLogs.has(log.id) ? (
+                                <div className="animate-spin w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full" />
+                              ) : (
+                                <SafeIcon icon={FiRefreshCw} className="text-sm" />
+                              )}
+                            </motion.button>
+                          )}
+                        </div>
                       </div>
+                      
                       <div className="flex flex-wrap gap-2 mb-2">
                         <span className="px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded-full">
                           Status: {log.status_code}
                         </span>
+                        {!selectedWebhookForLogs && (
+                          <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                            {webhooks.find(w => w.id === log.webhook_id)?.name || 'Webhook eliminado'}
+                          </span>
+                        )}
                       </div>
+
                       {log.response_body && (
                         <div className="mt-2">
                           <div className="font-medium text-sm text-gray-700 mb-1">Respuesta:</div>
@@ -660,7 +840,7 @@ const WebhookManager = () => {
         <div className="px-6 py-4 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900">Webhooks Configurados</h3>
         </div>
-
+        
         {webhooks.length === 0 ? (
           <div className="p-8 text-center text-gray-500">
             <SafeIcon icon={FiLink} className="text-4xl mx-auto mb-4 text-gray-300" />
@@ -681,23 +861,28 @@ const WebhookManager = () => {
                           webhook.enabled ? 'text-green-600' : 'text-gray-400'
                         }`}
                       >
-                        <SafeIcon icon={webhook.enabled ? FiToggleRight : FiToggleLeft} className="text-2xl" />
+                        <SafeIcon
+                          icon={webhook.enabled ? FiToggleRight : FiToggleLeft}
+                          className="text-2xl"
+                        />
                       </button>
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        webhook.enabled 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-gray-100 text-gray-600'
-                      }`}>
+                      <span
+                        className={`px-2 py-1 text-xs font-medium rounded-full ${
+                          webhook.enabled
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
                         {webhook.enabled ? 'Activo' : 'Inactivo'}
                       </span>
                     </div>
-
+                    
                     <p className="text-sm text-gray-600 mb-2">{webhook.url}</p>
                     
                     {webhook.description && (
                       <p className="text-sm text-gray-500 mb-3">{webhook.description}</p>
                     )}
-
+                    
                     <div className="flex flex-wrap gap-2 mb-3">
                       {webhook.trigger_events?.map(event => {
                         const eventInfo = availableEvents.find(e => e.id === event);
@@ -711,12 +896,12 @@ const WebhookManager = () => {
                         );
                       })}
                     </div>
-
+                    
                     <div className="text-xs text-gray-400">
                       Creado: {new Date(webhook.created_at).toLocaleDateString()}
                     </div>
                   </div>
-
+                  
                   <div className="flex items-center gap-2 ml-4">
                     <motion.button
                       whileHover={{ scale: 1.05 }}
@@ -746,7 +931,7 @@ const WebhookManager = () => {
                         <SafeIcon icon={FiZap} className="text-lg" />
                       )}
                     </motion.button>
-
+                    
                     <motion.button
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
@@ -756,7 +941,7 @@ const WebhookManager = () => {
                     >
                       <SafeIcon icon={FiEdit} className="text-lg" />
                     </motion.button>
-
+                    
                     <motion.button
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}

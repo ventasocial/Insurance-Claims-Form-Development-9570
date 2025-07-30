@@ -11,6 +11,8 @@ export class WebhookService {
    */
   static async triggerWebhooks(event, data) {
     try {
+      console.log(`Triggering webhooks for event: ${event}`);
+      
       // Obtener todos los webhooks activos que escuchan este evento
       const { data: webhooks, error } = await supabase
         .from('webhooks_r2x4')
@@ -28,6 +30,8 @@ export class WebhookService {
         return;
       }
 
+      console.log(`Found ${webhooks.length} active webhooks for event: ${event}`);
+
       // Preparar el payload del webhook
       const payload = {
         event: event,
@@ -41,7 +45,7 @@ export class WebhookService {
       );
 
       await Promise.allSettled(webhookPromises);
-      
+      console.log(`Webhooks triggered for event: ${event}`);
     } catch (error) {
       console.error('Error triggering webhooks:', error);
     }
@@ -54,6 +58,8 @@ export class WebhookService {
    */
   static async sendWebhook(webhook, payload) {
     try {
+      console.log(`Sending webhook to: ${webhook.name} (${webhook.url})`);
+      
       const headers = {
         'Content-Type': 'application/json',
         'User-Agent': 'Fortex-Webhook/1.0',
@@ -62,20 +68,41 @@ export class WebhookService {
         ...JSON.parse(webhook.headers || '{}')
       };
 
+      // Usar AbortController para timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 segundos timeout
+
       const response = await fetch(webhook.url, {
         method: 'POST',
         headers: headers,
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
+
+      let responseBody = null;
+      let success = response.ok;
+
+      // Leer la respuesta solo si hay error
+      if (!response.ok) {
+        try {
+          responseBody = await response.text();
+        } catch (e) {
+          responseBody = `Failed to read response: ${e.message}`;
+        }
+      }
 
       // Log del resultado del webhook
       const logData = {
         webhook_id: webhook.id,
         event: payload.event,
         status_code: response.status,
-        success: response.ok,
-        response_body: response.ok ? null : await response.text(),
-        sent_at: new Date().toISOString()
+        success: success,
+        response_body: responseBody,
+        payload: JSON.stringify(payload),
+        sent_at: new Date().toISOString(),
+        retry_count: 0
       };
 
       // Guardar log en la base de datos
@@ -85,6 +112,10 @@ export class WebhookService {
 
       if (!response.ok) {
         console.error(`Webhook failed for ${webhook.name}: ${response.status} ${response.statusText}`);
+        console.error('Response body:', responseBody);
+        
+        // Programar reintento automático
+        await this.scheduleRetry(webhook, payload, 1);
       } else {
         console.log(`Webhook sent successfully to ${webhook.name}`);
       }
@@ -92,17 +123,202 @@ export class WebhookService {
     } catch (error) {
       console.error(`Error sending webhook to ${webhook.name}:`, error);
       
+      let errorMessage = error.message;
+      let statusCode = 0;
+
+      if (error.name === 'AbortError') {
+        errorMessage = 'Request timeout (30s)';
+        statusCode = 408;
+      } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        errorMessage = 'Network error or invalid URL';
+        statusCode = 0;
+      }
+
       // Log del error
+      const logData = {
+        webhook_id: webhook.id,
+        event: payload.event,
+        status_code: statusCode,
+        success: false,
+        response_body: errorMessage,
+        payload: JSON.stringify(payload),
+        sent_at: new Date().toISOString(),
+        retry_count: 0
+      };
+
       await supabase
         .from('webhook_logs_r2x4')
-        .insert([{
-          webhook_id: webhook.id,
-          event: payload.event,
-          status_code: 0,
-          success: false,
-          response_body: error.message,
-          sent_at: new Date().toISOString()
-        }]);
+        .insert([logData]);
+
+      // Programar reintento automático
+      await this.scheduleRetry(webhook, payload, 1);
+    }
+  }
+
+  /**
+   * Programa un reintento para un webhook fallido
+   * @param {Object} webhook - Configuración del webhook
+   * @param {Object} payload - Datos originales
+   * @param {number} retryCount - Número de intento
+   */
+  static async scheduleRetry(webhook, payload, retryCount) {
+    const maxRetries = 3;
+    
+    if (retryCount > maxRetries) {
+      console.log(`Max retries reached for webhook ${webhook.name}`);
+      return;
+    }
+
+    // Delays progresivos: 1min, 5min, 15min
+    const delays = [60000, 300000, 900000]; // en milisegundos
+    const delay = delays[retryCount - 1] || delays[delays.length - 1];
+
+    console.log(`Scheduling retry ${retryCount} for webhook ${webhook.name} in ${delay/1000} seconds`);
+
+    setTimeout(async () => {
+      await this.retryWebhook(webhook, payload, retryCount);
+    }, delay);
+  }
+
+  /**
+   * Reintenta enviar un webhook
+   * @param {Object} webhook - Configuración del webhook
+   * @param {Object} payload - Datos originales
+   * @param {number} retryCount - Número de intento
+   */
+  static async retryWebhook(webhook, payload, retryCount) {
+    try {
+      console.log(`Retrying webhook ${webhook.name} (attempt ${retryCount})`);
+      
+      const headers = {
+        'Content-Type': 'application/json',
+        'User-Agent': 'Fortex-Webhook/1.0',
+        'X-Webhook-Event': payload.event,
+        'X-Webhook-Timestamp': payload.timestamp,
+        'X-Webhook-Retry': retryCount.toString(),
+        ...JSON.parse(webhook.headers || '{}')
+      };
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+      const response = await fetch(webhook.url, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      let responseBody = null;
+      let success = response.ok;
+
+      if (!response.ok) {
+        try {
+          responseBody = await response.text();
+        } catch (e) {
+          responseBody = `Failed to read response: ${e.message}`;
+        }
+      }
+
+      // Log del resultado del reintento
+      const logData = {
+        webhook_id: webhook.id,
+        event: payload.event,
+        status_code: response.status,
+        success: success,
+        response_body: responseBody,
+        payload: JSON.stringify(payload),
+        sent_at: new Date().toISOString(),
+        retry_count: retryCount
+      };
+
+      await supabase
+        .from('webhook_logs_r2x4')
+        .insert([logData]);
+
+      if (!response.ok) {
+        console.error(`Webhook retry ${retryCount} failed for ${webhook.name}: ${response.status}`);
+        // Programar siguiente reintento
+        await this.scheduleRetry(webhook, payload, retryCount + 1);
+      } else {
+        console.log(`Webhook retry ${retryCount} successful for ${webhook.name}`);
+      }
+
+    } catch (error) {
+      console.error(`Error in webhook retry ${retryCount} for ${webhook.name}:`, error);
+      
+      let errorMessage = error.message;
+      let statusCode = 0;
+
+      if (error.name === 'AbortError') {
+        errorMessage = 'Request timeout (30s)';
+        statusCode = 408;
+      }
+
+      const logData = {
+        webhook_id: webhook.id,
+        event: payload.event,
+        status_code: statusCode,
+        success: false,
+        response_body: errorMessage,
+        payload: JSON.stringify(payload),
+        sent_at: new Date().toISOString(),
+        retry_count: retryCount
+      };
+
+      await supabase
+        .from('webhook_logs_r2x4')
+        .insert([logData]);
+
+      // Programar siguiente reintento
+      await this.scheduleRetry(webhook, payload, retryCount + 1);
+    }
+  }
+
+  /**
+   * Reenvía manualmente un webhook fallido
+   * @param {string} logId - ID del log del webhook fallido
+   */
+  static async manualRetry(logId) {
+    try {
+      // Obtener el log del webhook fallido
+      const { data: log, error: logError } = await supabase
+        .from('webhook_logs_r2x4')
+        .select('*')
+        .eq('id', logId)
+        .single();
+
+      if (logError || !log) {
+        throw new Error('Log not found');
+      }
+
+      // Obtener la configuración del webhook
+      const { data: webhook, error: webhookError } = await supabase
+        .from('webhooks_r2x4')
+        .select('*')
+        .eq('id', log.webhook_id)
+        .single();
+
+      if (webhookError || !webhook) {
+        throw new Error('Webhook not found');
+      }
+
+      if (!webhook.enabled) {
+        throw new Error('Webhook is disabled');
+      }
+
+      // Parsear el payload original
+      const payload = JSON.parse(log.payload);
+
+      // Enviar el webhook
+      await this.retryWebhook(webhook, payload, (log.retry_count || 0) + 1);
+
+      return { success: true, message: 'Webhook retry initiated' };
+    } catch (error) {
+      console.error('Error in manual retry:', error);
+      return { success: false, message: error.message };
     }
   }
 
@@ -119,7 +335,7 @@ export class WebhookService {
       }
 
       const result = {};
-      
+
       // Procesar cada tipo de documento
       for (const docType in documents) {
         if (!Array.isArray(documents[docType]) || documents[docType].length === 0) {
@@ -127,26 +343,24 @@ export class WebhookService {
         }
 
         result[docType] = [];
-        
+
         // Para cada documento del tipo, obtener su URL pública
         for (const doc of documents[docType]) {
-          // Si ya tenemos una URL (archivo local), la usamos directamente
+          // Si ya tenemos una URL (archivo local), construir la URL de Supabase
           if (doc.url && doc.isLocal) {
-            // En este caso, no tenemos la URL de Supabase porque el archivo está almacenado localmente
-            // en una implementación real, aquí buscaríamos la URL en Storage basada en alguna convención de nombres
             result[docType].push({
               name: doc.name,
               type: doc.type,
               size: doc.size,
               url: `${supabase.supabaseUrl}/storage/v1/object/public/claims/${submissionId}/${docType}/${doc.name}`
             });
-          } 
+          }
           // Si es una URL de Supabase Storage
           else if (doc.path) {
             const { data: publicUrl } = supabase.storage
               .from('claims')
               .getPublicUrl(`${submissionId}/${docType}/${doc.path}`);
-              
+
             result[docType].push({
               name: doc.name || doc.path.split('/').pop(),
               type: doc.type || 'application/octet-stream',
@@ -156,7 +370,7 @@ export class WebhookService {
           }
         }
       }
-      
+
       return result;
     } catch (error) {
       console.error('Error getting document public URLs:', error);
@@ -254,14 +468,13 @@ export class WebhookService {
    */
   static countUploadedDocuments(documents) {
     if (!documents) return 0;
-    
+
     let count = 0;
     Object.values(documents).forEach(docArray => {
       if (Array.isArray(docArray)) {
         count += docArray.length;
       }
     });
-    
     return count;
   }
 }
