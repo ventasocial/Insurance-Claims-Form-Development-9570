@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
-import ContactInfo from '../components/form-steps/ContactInfo';
 import InsuranceCompany from '../components/form-steps/InsuranceCompany';
 import ClaimType from '../components/form-steps/ClaimType';
 import ReimbursementDetails from '../components/form-steps/ReimbursementDetails';
 import ServiceTypes from '../components/form-steps/ServiceTypes';
-import SinisterDescription from '../components/form-steps/SinisterDescription';
 import ProgrammingDetails from '../components/form-steps/ProgrammingDetails';
 import PersonsInvolved from '../components/form-steps/PersonsInvolved';
+import DocumentChecklist from '../components/form-steps/DocumentChecklist';
+import SinisterDescription from '../components/form-steps/SinisterDescription';
 import SignatureDocuments from '../components/form-steps/SignatureDocuments';
 import DocumentsSection from '../components/form-steps/DocumentsSection';
 import TermsAndConditions from '../components/form-steps/TermsAndConditions';
@@ -40,7 +40,6 @@ const ClaimsForm = () => {
     reimbursementType: '',
     claimNumber: '',
     serviceTypes: [],
-    sinisterDescription: '',
     programmingService: '',
     isCirugiaOrtopedica: undefined,
     personsInvolved: {
@@ -48,6 +47,8 @@ const ClaimsForm = () => {
       aseguradoAfectado: {},
       titularCuenta: {}
     },
+    documentChecklist: {},
+    sinisterDescription: '',
     signatureDocumentOption: '',
     documents: {},
     documentsSentByEmail: null,
@@ -85,7 +86,7 @@ const ClaimsForm = () => {
     const missingDocs = urlParams.get('missing');
     if (missingDocs && !session) {
       // Jump to documents section if specific documents are missing
-      setCurrentStep(9); // Documents section step (adjusted for new signature step)
+      setCurrentStep(8); // Documents section step (adjusted for new order)
     }
   }, [location]);
 
@@ -98,15 +99,14 @@ const ClaimsForm = () => {
     if (data.claimType === 'reembolso') {
       if (!data.reimbursementType) return 2;
       if (!data.serviceTypes || data.serviceTypes.length === 0) return 3;
-      if (!data.sinisterDescription) return 4;
       // Check if persons involved data is complete
-      const titular = data.personsInvolved?.titularAsegurado || {};
-      if (!titular.nombres) return 5;
+      const contactInfo = data.contactInfo || {};
+      if (!contactInfo.nombres) return 4;
     } else if (data.claimType === 'programacion') {
       if (!data.programmingService) return 2;
       // Check if persons involved data is complete
-      const titular = data.personsInvolved?.titularAsegurado || {};
-      if (!titular.nombres) return 3;
+      const contactInfo = data.contactInfo || {};
+      if (!contactInfo.nombres) return 3;
     }
 
     // Default to the first step if we can't determine
@@ -133,7 +133,6 @@ const ClaimsForm = () => {
 
   const getSteps = () => {
     const baseSteps = [
-      { id: 'contact', title: 'Información de Contacto', component: ContactInfo },
       { id: 'insurance', title: 'Aseguradora', component: InsuranceCompany },
       { id: 'claimType', title: 'Tipo de Reclamo', component: ClaimType }
     ];
@@ -141,8 +140,7 @@ const ClaimsForm = () => {
     if (formData.claimType === 'reembolso') {
       baseSteps.push(
         { id: 'reimbursement', title: 'Detalles del Reembolso', component: ReimbursementDetails },
-        { id: 'services', title: 'Tipos de Servicio', component: ServiceTypes },
-        { id: 'description', title: 'Descripción del Siniestro', component: SinisterDescription }
+        { id: 'services', title: 'Tipos de Servicio', component: ServiceTypes }
       );
     } else if (formData.claimType === 'programacion') {
       baseSteps.push(
@@ -153,8 +151,10 @@ const ClaimsForm = () => {
     if (formData.claimType) {
       baseSteps.push(
         { id: 'persons', title: 'Personas Involucradas', component: PersonsInvolved },
+        { id: 'checklist', title: 'Documentos Requeridos', component: DocumentChecklist },
+        { id: 'description', title: 'Descripción del Siniestro', component: SinisterDescription },
         { id: 'signature', title: 'Documentos de Firma', component: SignatureDocuments },
-        { id: 'documents', title: 'Documentos', component: DocumentsSection },
+        { id: 'documents', title: 'Subir Documentos', component: DocumentsSection },
         { id: 'terms', title: 'Términos y Condiciones', component: TermsAndConditions }
       );
     }
@@ -178,15 +178,6 @@ const ClaimsForm = () => {
 
   const canProceed = () => {
     switch (currentStepData?.id) {
-      case 'contact':
-        const contactInfo = formData.contactInfo;
-        return (
-          contactInfo.nombres &&
-          contactInfo.apellidoPaterno &&
-          contactInfo.apellidoMaterno &&
-          contactInfo.email && validateEmail(contactInfo.email) &&
-          contactInfo.telefono && validateWhatsApp(contactInfo.telefono)
-        );
       case 'insurance':
         return formData.insuranceCompany;
       case 'claimType':
@@ -196,25 +187,39 @@ const ClaimsForm = () => {
                (formData.reimbursementType === 'inicial' || formData.claimNumber);
       case 'services':
         return formData.serviceTypes.length > 0;
-      case 'description':
-        return formData.sinisterDescription.trim().length > 10;
       case 'programming':
         return formData.programmingService && 
                (formData.programmingService !== 'cirugia' || 
                 formData.insuranceCompany !== 'gnp' || 
                 formData.isCirugiaOrtopedica !== undefined);
       case 'persons':
+        // Verificar que la información de contacto esté completa
+        const contactInfo = formData.contactInfo;
+        const contactValid = contactInfo && 
+                           contactInfo.nombres &&
+                           contactInfo.apellidoPaterno &&
+                           contactInfo.apellidoMaterno &&
+                           contactInfo.email && validateEmail(contactInfo.email) &&
+                           contactInfo.telefono && validateWhatsApp(contactInfo.telefono);
+        
         // Verificar que al menos el titular del seguro tenga la información completa
         const titular = formData.personsInvolved.titularAsegurado || {};
         const requiredFields = ['nombres', 'apellidoPaterno', 'apellidoMaterno', 'email', 'telefono'];
-        return requiredFields.every(field => titular[field] && titular[field].trim() !== '') &&
-               validateEmail(titular.email || '') &&
-               validateWhatsApp(titular.telefono || '');
+        const titularValid = requiredFields.every(field => titular[field] && titular[field].trim() !== '') &&
+                           validateEmail(titular.email || '') &&
+                           validateWhatsApp(titular.telefono || '');
+        
+        return contactValid && titularValid;
+      case 'checklist':
+        // No es obligatorio marcar todos, solo informativo
+        return true;
+      case 'description':
+        return formData.sinisterDescription && formData.sinisterDescription.trim().length > 10;
       case 'signature':
         // Check if signature document option is selected
         const hasSignatureDocs = getSignatureDocuments().length > 0;
         if (!hasSignatureDocs) return true; // Skip if no signature documents needed
-        return formData.signatureDocumentOption; // Solo necesita tener seleccionada una opción
+        return formData.signatureDocumentOption;
       case 'documents':
         // Verificar que el informe médico esté presente
         const documents = formData.documents || {};

@@ -3,14 +3,19 @@ import { motion } from 'framer-motion';
 import SafeIcon from '../../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
-const { FiUser, FiUserCheck } = FiIcons;
+const { FiUser, FiUserCheck, FiPhone, FiMail } = FiIcons;
 
 const PersonsInvolved = ({ formData, updateFormData }) => {
-  const [activeTab, setActiveTab] = useState('titularAsegurado');
+  const [activeTab, setActiveTab] = useState('contactInfo');
 
   // Determinar qué pestañas mostrar basado en el tipo de reclamo
   const getPersonTypes = () => {
     const baseTypes = [
+      {
+        id: 'contactInfo',
+        title: 'Información de Contacto',
+        description: 'Datos de quien reporta el reclamo'
+      },
       {
         id: 'titularAsegurado',
         title: 'Asegurado Titular',
@@ -45,13 +50,20 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
   }, [personTypes, activeTab]);
 
   const handlePersonDataChange = (personType, field, value) => {
-    updateFormData('personsInvolved', {
-      ...formData.personsInvolved,
-      [personType]: {
-        ...(formData.personsInvolved[personType] || {}),
+    if (personType === 'contactInfo') {
+      updateFormData('contactInfo', {
+        ...formData.contactInfo,
         [field]: value
-      }
-    });
+      });
+    } else {
+      updateFormData('personsInvolved', {
+        ...formData.personsInvolved,
+        [personType]: {
+          ...(formData.personsInvolved[personType] || {}),
+          [field]: value
+        }
+      });
+    }
   };
 
   const handleSameAsContact = (personType, checked) => {
@@ -63,7 +75,6 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
         telefono: formData.contactInfo?.telefono || '',
         email: formData.contactInfo?.email || ''
       };
-      
       updateFormData('personsInvolved', {
         ...formData.personsInvolved,
         [personType]: contactData
@@ -86,7 +97,6 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
   const isContactDataSame = (personType) => {
     const personData = formData.personsInvolved[personType] || {};
     const contactInfo = formData.contactInfo || {};
-    
     return (
       personData.nombres === contactInfo.nombres &&
       personData.apellidoPaterno === contactInfo.apellidoPaterno &&
@@ -106,6 +116,105 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
   const validateEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
+  };
+
+  const ContactInfoForm = () => {
+    const contactInfo = formData.contactInfo || {};
+    const isWhatsAppValid = validateWhatsApp(contactInfo.telefono || '');
+    const isEmailValid = validateEmail(contactInfo.email || '');
+
+    return (
+      <div className="space-y-6">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <div className="flex items-center gap-3">
+            <SafeIcon icon={FiPhone} className="text-blue-600" />
+            <div>
+              <h3 className="font-medium text-blue-900">Información de Contacto</h3>
+              <p className="text-sm text-blue-700">
+                Esta es la información de la persona que está reportando el reclamo y será contactada por Fortex.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Nombre(s) *
+            </label>
+            <input
+              type="text"
+              value={contactInfo.nombres || ''}
+              onChange={(e) => handlePersonDataChange('contactInfo', 'nombres', e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#204499] focus:border-transparent transition-all duration-300 text-lg"
+              placeholder="Ingresa tu(s) nombre(s)"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Apellido Paterno *
+            </label>
+            <input
+              type="text"
+              value={contactInfo.apellidoPaterno || ''}
+              onChange={(e) => handlePersonDataChange('contactInfo', 'apellidoPaterno', e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#204499] focus:border-transparent transition-all duration-300 text-lg"
+              placeholder="Apellido paterno"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Apellido Materno *
+            </label>
+            <input
+              type="text"
+              value={contactInfo.apellidoMaterno || ''}
+              onChange={(e) => handlePersonDataChange('contactInfo', 'apellidoMaterno', e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#204499] focus:border-transparent transition-all duration-300 text-lg"
+              placeholder="Apellido materno"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              WhatsApp *
+            </label>
+            <input
+              type="tel"
+              value={contactInfo.telefono || ''}
+              onChange={(e) => handlePersonDataChange('contactInfo', 'telefono', e.target.value)}
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#204499] focus:border-transparent transition-all duration-300 text-lg ${
+                contactInfo.telefono && !isWhatsAppValid ? 'border-red-300 bg-red-50' : 'border-gray-300'
+              }`}
+              placeholder="+528122334455"
+            />
+            {contactInfo.telefono && !isWhatsAppValid && (
+              <p className="text-red-500 text-sm mt-1">
+                Formato requerido: +528122334455 (código de país +52 seguido de 10 dígitos)
+              </p>
+            )}
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Correo Electrónico *
+            </label>
+            <input
+              type="email"
+              value={contactInfo.email || ''}
+              onChange={(e) => handlePersonDataChange('contactInfo', 'email', e.target.value)}
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#204499] focus:border-transparent transition-all duration-300 text-lg ${
+                contactInfo.email && !isEmailValid ? 'border-red-300 bg-red-50' : 'border-gray-300'
+              }`}
+              placeholder="tu@email.com"
+            />
+            {contactInfo.email && !isEmailValid && (
+              <p className="text-red-500 text-sm mt-1">
+                Ingresa un correo electrónico válido (ejemplo: usuario@dominio.com)
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const PersonForm = ({ personType }) => {
@@ -164,7 +273,6 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
               />
             </div>
           </div>
-
           <div className="grid md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -189,9 +297,7 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
                 onChange={(e) => handlePersonDataChange(personType, 'telefono', e.target.value)}
                 disabled={isSameAsContact}
                 className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#204499] focus:border-transparent transition-all duration-300 disabled:bg-gray-100 disabled:cursor-not-allowed ${
-                  personData.telefono && !isWhatsAppValid && !isSameAsContact
-                    ? 'border-red-300 bg-red-50' 
-                    : 'border-gray-300'
+                  personData.telefono && !isWhatsAppValid && !isSameAsContact ? 'border-red-300 bg-red-50' : 'border-gray-300'
                 }`}
                 placeholder="+528122334455"
               />
@@ -202,7 +308,6 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
               )}
             </div>
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Correo Electrónico *
@@ -213,9 +318,7 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
               onChange={(e) => handlePersonDataChange(personType, 'email', e.target.value)}
               disabled={isSameAsContact}
               className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#204499] focus:border-transparent transition-all duration-300 disabled:bg-gray-100 disabled:cursor-not-allowed ${
-                personData.email && !isEmailValid && !isSameAsContact
-                  ? 'border-red-300 bg-red-50' 
-                  : 'border-gray-300'
+                personData.email && !isEmailValid && !isSameAsContact ? 'border-red-300 bg-red-50' : 'border-gray-300'
               }`}
               placeholder="correo@email.com"
             />
@@ -233,14 +336,13 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
   // Asegurar que los datos estén inicializados para todas las pestañas
   useEffect(() => {
     const initializedData = { ...formData.personsInvolved };
-    
     // Inicializar cada tipo de persona con un objeto vacío si no existe
     personTypes.forEach(type => {
-      if (!initializedData[type.id]) {
+      if (type.id !== 'contactInfo' && !initializedData[type.id]) {
         initializedData[type.id] = {};
       }
     });
-    
+
     // Solo actualizar si es necesario
     if (Object.keys(initializedData).length !== Object.keys(formData.personsInvolved || {}).length) {
       updateFormData('personsInvolved', initializedData);
@@ -255,7 +357,7 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
     >
       <div className="text-center mb-8">
         <h2 className="text-3xl font-bold text-gray-900 mb-2">
-          Personas Involucradas
+          Información de Personas Involucradas
         </h2>
         <p className="text-gray-600">
           Completa la información de todas las personas relacionadas con el reclamo
@@ -276,7 +378,10 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
               }`}
             >
               <div className="flex items-center gap-2">
-                <SafeIcon icon={FiUser} className="text-lg" />
+                <SafeIcon 
+                  icon={person.id === 'contactInfo' ? FiMail : FiUser} 
+                  className="text-lg" 
+                />
                 <div className="text-left">
                   <div>{person.title}</div>
                   <div className="text-xs text-gray-400">{person.description}</div>
@@ -295,7 +400,11 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
         transition={{ duration: 0.3 }}
         className="bg-gray-50 rounded-lg p-6"
       >
-        <PersonForm personType={activeTab} />
+        {activeTab === 'contactInfo' ? (
+          <ContactInfoForm />
+        ) : (
+          <PersonForm personType={activeTab} />
+        )}
       </motion.div>
     </motion.div>
   );
