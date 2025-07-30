@@ -7,14 +7,15 @@ const { FiUser, FiUserCheck, FiPhone, FiMail } = FiIcons;
 
 const PersonsInvolved = ({ formData, updateFormData }) => {
   const [activeTab, setActiveTab] = useState('contactInfo');
+  const [tabsCompleted, setTabsCompleted] = useState({});
 
   // Determinar qué pestañas mostrar basado en el tipo de reclamo
   const getPersonTypes = () => {
     const baseTypes = [
       {
         id: 'contactInfo',
-        title: 'Información de Contacto',
-        description: 'Datos de quien reporta el reclamo'
+        title: 'Contacto',
+        description: 'Quien reporta el reclamo'
       },
       {
         id: 'titularAsegurado',
@@ -47,23 +48,48 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
     if (!personTypes.some(type => type.id === activeTab)) {
       setActiveTab(personTypes[0].id);
     }
-  }, [personTypes, activeTab]);
+  }, [personTypes.length]); // Solo depende de la longitud, no del array completo
 
+  // Función simplificada para manejar cambios en los campos del formulario
   const handlePersonDataChange = (personType, field, value) => {
     if (personType === 'contactInfo') {
-      updateFormData('contactInfo', {
-        ...formData.contactInfo,
-        [field]: value
-      });
+      const updatedContactInfo = { ...formData.contactInfo, [field]: value };
+      updateFormData('contactInfo', updatedContactInfo);
     } else {
-      updateFormData('personsInvolved', {
+      const updatedPersonsInvolved = {
         ...formData.personsInvolved,
-        [personType]: {
-          ...(formData.personsInvolved[personType] || {}),
-          [field]: value
-        }
-      });
+        [personType]: { ...(formData.personsInvolved?.[personType] || {}), [field]: value }
+      };
+      updateFormData('personsInvolved', updatedPersonsInvolved);
     }
+  };
+
+  // Función separada para actualizar el estado de completado
+  const updateTabCompletion = (personType) => {
+    let isComplete = false;
+    if (personType === 'contactInfo') {
+      const contactInfo = formData.contactInfo || {};
+      isComplete = validatePersonData(contactInfo);
+    } else {
+      const personData = formData.personsInvolved?.[personType] || {};
+      isComplete = validatePersonData(personData);
+    }
+
+    setTabsCompleted(prev => ({ ...prev, [personType]: isComplete }));
+  };
+
+  // Validar si los datos de una persona están completos
+  const validatePersonData = (data) => {
+    if (!data) return false;
+    
+    // Verificar campos obligatorios
+    const requiredFields = ['nombres', 'apellidoPaterno', 'apellidoMaterno', 'email', 'telefono'];
+    const hasAllFields = requiredFields.every(field => data[field] && data[field].trim() !== '');
+    
+    if (!hasAllFields) return false;
+    
+    // Validar formato de email y teléfono
+    return validateEmail(data.email) && validateWhatsApp(data.telefono);
   };
 
   const handleSameAsContact = (personType, checked) => {
@@ -75,13 +101,14 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
         telefono: formData.contactInfo?.telefono || '',
         email: formData.contactInfo?.email || ''
       };
-      updateFormData('personsInvolved', {
+      const updatedPersonsInvolved = {
         ...formData.personsInvolved,
         [personType]: contactData
-      });
+      };
+      updateFormData('personsInvolved', updatedPersonsInvolved);
     } else {
       // Al desmarcar, limpiamos los campos pero mantenemos la estructura
-      updateFormData('personsInvolved', {
+      const updatedPersonsInvolved = {
         ...formData.personsInvolved,
         [personType]: {
           nombres: '',
@@ -90,12 +117,13 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
           telefono: '',
           email: ''
         }
-      });
+      };
+      updateFormData('personsInvolved', updatedPersonsInvolved);
     }
   };
 
   const isContactDataSame = (personType) => {
-    const personData = formData.personsInvolved[personType] || {};
+    const personData = formData.personsInvolved?.[personType] || {};
     const contactInfo = formData.contactInfo || {};
     return (
       personData.nombres === contactInfo.nombres &&
@@ -108,15 +136,40 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
 
   // Validación de WhatsApp
   const validateWhatsApp = (phone) => {
+    if (!phone) return false;
     const phoneRegex = /^\+52\d{10}$/;
     return phoneRegex.test(phone);
   };
 
   // Validación de email
   const validateEmail = (email) => {
+    if (!email) return false;
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
   };
+
+  // Manejar el avance a la siguiente pestaña
+  const handleNextTab = () => {
+    const currentIndex = personTypes.findIndex(type => type.id === activeTab);
+    if (currentIndex < personTypes.length - 1) {
+      setActiveTab(personTypes[currentIndex + 1].id);
+    }
+  };
+
+  // Manejar el retroceso a la pestaña anterior
+  const handlePrevTab = () => {
+    const currentIndex = personTypes.findIndex(type => type.id === activeTab);
+    if (currentIndex > 0) {
+      setActiveTab(personTypes[currentIndex - 1].id);
+    }
+  };
+
+  // Actualizar estado de completado cuando cambien los datos
+  useEffect(() => {
+    personTypes.forEach(type => {
+      updateTabCompletion(type.id);
+    });
+  }, [formData.contactInfo, formData.personsInvolved]);
 
   const ContactInfoForm = () => {
     const contactInfo = formData.contactInfo || {};
@@ -129,7 +182,7 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
           <div className="flex items-center gap-3">
             <SafeIcon icon={FiPhone} className="text-blue-600" />
             <div>
-              <h3 className="font-medium text-blue-900">Información de Contacto</h3>
+              <h3 className="font-medium text-blue-900">Contacto</h3>
               <p className="text-sm text-blue-700">
                 Esta es la información de la persona que está reportando el reclamo y será contactada por Fortex.
               </p>
@@ -218,7 +271,7 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
   };
 
   const PersonForm = ({ personType }) => {
-    const personData = formData.personsInvolved[personType] || {};
+    const personData = formData.personsInvolved?.[personType] || {};
     const isSameAsContact = isContactDataSame(personType);
     const isWhatsAppValid = validateWhatsApp(personData.telefono || '');
     const isEmailValid = validateEmail(personData.email || '');
@@ -333,21 +386,10 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
     );
   };
 
-  // Asegurar que los datos estén inicializados para todas las pestañas
-  useEffect(() => {
-    const initializedData = { ...formData.personsInvolved };
-    // Inicializar cada tipo de persona con un objeto vacío si no existe
-    personTypes.forEach(type => {
-      if (type.id !== 'contactInfo' && !initializedData[type.id]) {
-        initializedData[type.id] = {};
-      }
-    });
-
-    // Solo actualizar si es necesario
-    if (Object.keys(initializedData).length !== Object.keys(formData.personsInvolved || {}).length) {
-      updateFormData('personsInvolved', initializedData);
-    }
-  }, [personTypes]);
+  // Verificar si todos los tabs necesarios están completos
+  const areAllTabsCompleted = () => {
+    return personTypes.every(type => tabsCompleted[type.id]);
+  };
 
   return (
     <motion.div
@@ -378,12 +420,14 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
               }`}
             >
               <div className="flex items-center gap-2">
-                <SafeIcon 
-                  icon={person.id === 'contactInfo' ? FiMail : FiUser} 
-                  className="text-lg" 
-                />
+                <SafeIcon icon={person.id === 'contactInfo' ? FiMail : FiUser} className="text-lg" />
                 <div className="text-left">
-                  <div>{person.title}</div>
+                  <div className="flex items-center gap-1">
+                    {person.title}
+                    {tabsCompleted[person.id] && (
+                      <SafeIcon icon={FiUserCheck} className="text-green-500 ml-1" />
+                    )}
+                  </div>
                   <div className="text-xs text-gray-400">{person.description}</div>
                 </div>
               </div>
@@ -406,6 +450,63 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
           <PersonForm personType={activeTab} />
         )}
       </motion.div>
+
+      {/* Navigation within tabs */}
+      <div className="flex justify-between pt-4">
+        <button
+          onClick={handlePrevTab}
+          disabled={activeTab === personTypes[0].id}
+          className={`px-4 py-2 rounded-lg transition-colors ${
+            activeTab === personTypes[0].id
+              ? 'text-gray-400 cursor-not-allowed'
+              : 'text-gray-700 hover:bg-gray-200'
+          }`}
+        >
+          Anterior
+        </button>
+        {activeTab !== personTypes[personTypes.length - 1].id ? (
+          <button
+            onClick={handleNextTab}
+            className="px-4 py-2 bg-[#204499] text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Siguiente
+          </button>
+        ) : (
+          <div className="flex items-center">
+            {!areAllTabsCompleted() && (
+              <p className="text-amber-600 mr-2 text-sm">
+                Por favor completa todos los formularios
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Progress indicator */}
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-sm font-medium text-gray-700">Progreso:</span>
+          <div className="flex gap-1">
+            {personTypes.map((person) => (
+              <div
+                key={person.id}
+                className={`w-3 h-3 rounded-full ${
+                  tabsCompleted[person.id] ? 'bg-green-500' : 'bg-gray-300'
+                }`}
+                title={person.title}
+              />
+            ))}
+          </div>
+        </div>
+        <div className="w-full bg-gray-200 rounded-full h-2">
+          <div
+            className="bg-[#204499] h-2 rounded-full transition-all duration-300"
+            style={{
+              width: `${(Object.values(tabsCompleted).filter(Boolean).length / personTypes.length) * 100}%`
+            }}
+          />
+        </div>
+      </div>
     </motion.div>
   );
 };

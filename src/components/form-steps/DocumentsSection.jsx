@@ -3,10 +3,10 @@ import { motion } from 'framer-motion';
 import SafeIcon from '../../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
-const { FiUpload, FiFile, FiTrash2, FiEye, FiPaperclip, FiAlertCircle } = FiIcons;
+const { FiUpload, FiFile, FiTrash2, FiEye, FiPaperclip, FiAlertCircle, FiCheckCircle } = FiIcons;
 
 const DocumentsSection = ({ formData, updateFormData }) => {
-  const [uploadedFiles, setUploadedFiles] = useState({});
+  const [uploadedFiles, setUploadedFiles] = useState(formData.documents || {});
   const [previewFile, setPreviewFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
@@ -15,7 +15,6 @@ const DocumentsSection = ({ formData, updateFormData }) => {
 
   const handleFileUpload = async (documentType, files) => {
     if (!files || files.length === 0) return;
-
     // For now, we'll store files locally due to storage limitations
     handleLocalUpload(documentType, files);
   };
@@ -40,7 +39,6 @@ const DocumentsSection = ({ formData, updateFormData }) => {
 
     setUploadedFiles(newFiles);
     updateFormData('documents', newFiles);
-
     // Show email form automatically
     setShowEmailForm(true);
   };
@@ -53,7 +51,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
 
     // Simulate sending files by email
     alert(`Los documentos se enviarán a: ${emailToSend}\n\nPor favor, espera la confirmación del equipo de soporte.`);
-
+    
     // Update form data to indicate email method was used
     updateFormData('documentsSentByEmail', {
       email: emailToSend,
@@ -70,13 +68,14 @@ const DocumentsSection = ({ formData, updateFormData }) => {
       if (fileToRemove.url && fileToRemove.isLocal) {
         URL.revokeObjectURL(fileToRemove.url);
       }
-
+      
       // Remove file from list
       newFiles[documentType].splice(fileIndex, 1);
+      
       if (newFiles[documentType].length === 0) {
         delete newFiles[documentType];
       }
-
+      
       setUploadedFiles(newFiles);
       updateFormData('documents', newFiles);
     }
@@ -123,6 +122,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
             title: 'Aviso de Accidente o Enfermedad',
             description: 'Formulario oficial para programación'
           });
+
           if (formData.programmingService === 'cirugia' && formData.isCirugiaOrtopedica === true) {
             requirements.forms.push({
               id: 'formato-cirugia-traumatologia',
@@ -284,9 +284,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
       />
       <label
         htmlFor={`upload-${document.id}`}
-        className={`cursor-pointer flex flex-col items-center space-y-3 ${
-          uploading ? 'opacity-50' : ''
-        }`}
+        className={`cursor-pointer flex flex-col items-center space-y-3 ${uploading ? 'opacity-50' : ''}`}
       >
         {uploading ? (
           <div className="animate-spin w-8 h-8 border-2 border-[#204499] border-t-transparent rounded-full"></div>
@@ -306,6 +304,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
 
   const FileList = ({ documentType }) => {
     const files = uploadedFiles[documentType] || [];
+
     if (files.length === 0) {
       return (
         <div className="text-center py-8 text-gray-500">
@@ -384,6 +383,38 @@ const DocumentsSection = ({ formData, updateFormData }) => {
     return count;
   };
 
+  // Verificar si todos los documentos requeridos están cargados
+  const areAllRequiredDocsUploaded = () => {
+    // Siempre necesitamos el informe médico
+    if (!uploadedFiles['informe-medico'] || uploadedFiles['informe-medico'].length === 0) {
+      return false;
+    }
+
+    // Para los documentos de firma, solo verificamos si se eligió descarga física
+    if (formData.signatureDocumentOption === 'download') {
+      // Verificar que los documentos de firma estén cargados
+      const signatureDocs = requirements.forms;
+      for (let doc of signatureDocs) {
+        if (!uploadedFiles[doc.id] || uploadedFiles[doc.id].length === 0) {
+          return false;
+        }
+      }
+    }
+
+    // Verificar otros documentos requeridos
+    const otherRequiredDocs = [
+      ...requirements.sinisterDocs,
+      ...requirements.receipts
+    ];
+    for (let doc of otherRequiredDocs) {
+      if (!uploadedFiles[doc.id] || uploadedFiles[doc.id].length === 0) {
+        return false;
+      }
+    }
+
+    return true;
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -392,10 +423,10 @@ const DocumentsSection = ({ formData, updateFormData }) => {
     >
       <div className="text-center mb-8">
         <h2 className="text-3xl font-bold text-gray-900 mb-2">
-          Documentos Requeridos
+          Subir Documentos
         </h2>
         <p className="text-gray-600">
-          Sube todos los documentos necesarios para procesar tu reclamo
+          Sube todos los documentos que marcaste como disponibles en el paso anterior
         </p>
       </div>
 
@@ -422,8 +453,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
             Documentos de Firma Digital
           </h3>
           <p className="text-gray-700">
-            Has seleccionado recibir los documentos de la aseguradora por email para firma digital. 
-            Estos documentos se enviarán directamente a las personas correspondientes y no necesitas subirlos aquí.
+            Has seleccionado recibir los documentos de la aseguradora por email para firma digital. Estos documentos se enviarán directamente a las personas correspondientes y no necesitas subirlos aquí.
           </p>
         </motion.div>
       )}
@@ -463,6 +493,38 @@ const DocumentsSection = ({ formData, updateFormData }) => {
         />
       )}
 
+      {/* Mensaje si faltan documentos requeridos */}
+      {!areAllRequiredDocsUploaded() && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-amber-50 border border-amber-200 rounded-lg p-4"
+        >
+          <div className="flex items-center gap-2">
+            <SafeIcon icon={FiAlertCircle} className="text-amber-600 text-lg" />
+            <p className="text-amber-800 font-medium">
+              Debes subir todos los documentos marcados como disponibles en el paso anterior para continuar.
+            </p>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Mensaje si todos los documentos están cargados */}
+      {areAllRequiredDocsUploaded() && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-green-50 border border-green-200 rounded-lg p-4"
+        >
+          <div className="flex items-center gap-2">
+            <SafeIcon icon={FiCheckCircle} className="text-green-600 text-lg" />
+            <p className="text-green-800 font-medium">
+              ¡Excelente! Has subido todos los documentos requeridos. Puedes continuar con el siguiente paso.
+            </p>
+          </div>
+        </motion.div>
+      )}
+
       {/* File Preview Modal - Mejorado para PDFs */}
       {previewFile && (
         <motion.div
@@ -479,7 +541,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
               <h3 className="font-medium">{previewFile.name}</h3>
               <button
                 onClick={() => setPreviewFile(null)}
-                className="text-gray-500 hover:text-gray-700 text-2xl"
+                className="text-gray-400 hover:text-gray-600 text-2xl"
               >
                 ×
               </button>
@@ -492,24 +554,27 @@ const DocumentsSection = ({ formData, updateFormData }) => {
                   className="max-w-full h-auto"
                 />
               ) : previewFile.type === 'application/pdf' ? (
-                <div className="w-full h-96 md:h-[600px]">
-                  <iframe
-                    src={previewFile.url}
-                    className="w-full h-full border-0"
-                    title={`Vista previa de ${previewFile.name}`}
+                <div className="w-full h-96 md:h-[600px] flex justify-center items-center">
+                  <object
+                    data={previewFile.url}
+                    type="application/pdf"
+                    className="w-full h-full"
                   >
-                    <p>
-                      Tu navegador no soporta la vista previa de PDFs.{' '}
-                      <a 
-                        href={previewFile.url} 
-                        target="_blank" 
+                    <div className="text-center py-8">
+                      <SafeIcon icon={FiFile} className="text-6xl text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-600 mb-4">
+                        Tu navegador no puede mostrar PDFs directamente
+                      </p>
+                      <a
+                        href={previewFile.url}
+                        target="_blank"
                         rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline"
+                        className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors inline-block"
                       >
-                        Haz clic aquí para abrir el archivo
+                        Abrir PDF en nueva pestaña
                       </a>
-                    </p>
-                  </iframe>
+                    </div>
+                  </object>
                 </div>
               ) : (
                 <div className="text-center py-8">
@@ -517,9 +582,9 @@ const DocumentsSection = ({ formData, updateFormData }) => {
                   <p className="text-gray-600 mb-4">
                     Vista previa no disponible para este tipo de archivo
                   </p>
-                  <a 
-                    href={previewFile.url} 
-                    target="_blank" 
+                  <a
+                    href={previewFile.url}
+                    target="_blank"
                     rel="noopener noreferrer"
                     className="text-blue-600 hover:underline font-medium"
                   >
