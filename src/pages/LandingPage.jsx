@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
@@ -16,13 +16,13 @@ const LandingPage = () => {
       description: "Llena la información paso a paso según tu tipo de reclamo"
     },
     {
-      number: "02",
+      number: "02", 
       title: "Envío a Fortex",
       description: "Tu información se envía automáticamente a nuestro equipo"
     },
     {
       number: "03",
-      title: "Verificación",
+      title: "Verificación", 
       description: "Revisamos y validamos toda tu documentación"
     },
     {
@@ -40,7 +40,7 @@ const LandingPage = () => {
     },
     {
       icon: FiCheckCircle,
-      title: "Verificación Profesional",
+      title: "Verificación Profesional", 
       description: "Nuestro equipo revisa cada documento antes del envío final"
     },
     {
@@ -65,14 +65,7 @@ const LandingPage = () => {
               alt="Fortex"
               className="h-12"
             />
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => navigate('/admin')}
-              className="text-sm text-gray-600 hover:text-[#204499] transition-colors"
-            >
-              Administrador
-            </motion.button>
+            {/* Eliminado enlace de administrador del header */}
           </div>
         </div>
       </motion.header>
@@ -91,8 +84,8 @@ const LandingPage = () => {
                 <span className="block text-[#204499]">para Clientes Fortex</span>
               </h1>
               <p className="text-xl text-gray-600 mb-4 max-w-3xl mx-auto">
-                Sistema exclusivo para clientes de Fortex. Gestiona tus reclamos de seguros 
-                de manera fácil y segura con el respaldo de nuestro equipo especializado.
+                Sistema exclusivo para clientes de Fortex. Gestiona tus reclamos 
+                de seguros de manera fácil y segura con el respaldo de nuestro equipo especializado.
               </p>
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-8 max-w-2xl mx-auto">
                 <p className="text-blue-800 font-medium">
@@ -188,7 +181,7 @@ const LandingPage = () => {
                 className="relative"
               >
                 <div className="bg-white p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow">
-                  <div className="text-3xl font-bold text-[#204499] mb-3 flex items-start">
+                  <div className="text-3xl font-bold text-[#204499] mb-3 flex items-start justify-start">
                     {step.number}
                   </div>
                   <h3 className="text-xl font-semibold text-gray-900 mb-2">
@@ -199,7 +192,7 @@ const LandingPage = () => {
                   </p>
                 </div>
                 {index < steps.length - 1 && (
-                  <div className="hidden lg:block absolute top-1/2 -right-4 transform -translate-y-1/2">
+                  <div className="hidden lg:block absolute top-1/4 -right-4 transform -translate-y-1/2">
                     <SafeIcon icon={FiArrowRight} className="text-2xl text-gray-300" />
                   </div>
                 )}
@@ -298,23 +291,19 @@ const LandingPage = () => {
           
           <div className="border-t border-gray-800 pt-6 flex flex-wrap justify-center md:justify-between items-center gap-4">
             <div className="flex flex-wrap justify-center gap-6 text-sm">
-              <a href="/terms" className="text-gray-400 hover:text-white transition-colors">
+              <Link to="/terms" className="text-gray-400 hover:text-white transition-colors">
                 Términos y Condiciones
-              </a>
-              <a href="/privacy" className="text-gray-400 hover:text-white transition-colors">
+              </Link>
+              <Link to="/privacy" className="text-gray-400 hover:text-white transition-colors">
                 Política de Privacidad
-              </a>
+              </Link>
             </div>
-            <a 
-              href="/admin" 
+            <Link 
+              to="/admin" 
               className="text-gray-400 hover:text-white text-sm transition-colors"
-              onClick={(e) => {
-                e.preventDefault();
-                navigate('/admin');
-              }}
             >
               Panel de Administrador
-            </a>
+            </Link>
           </div>
         </div>
       </footer>

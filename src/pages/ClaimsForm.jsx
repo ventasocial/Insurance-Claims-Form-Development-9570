@@ -9,6 +9,7 @@ import ServiceTypes from '../components/form-steps/ServiceTypes';
 import SinisterDescription from '../components/form-steps/SinisterDescription';
 import ProgrammingDetails from '../components/form-steps/ProgrammingDetails';
 import PersonsInvolved from '../components/form-steps/PersonsInvolved';
+import SignatureDocuments from '../components/form-steps/SignatureDocuments';
 import DocumentsSection from '../components/form-steps/DocumentsSection';
 import TermsAndConditions from '../components/form-steps/TermsAndConditions';
 import FormProgress from '../components/FormProgress';
@@ -40,6 +41,8 @@ const ClaimsForm = () => {
       aseguradoAfectado: {},
       titularCuenta: {}
     },
+    signatureDocumentOption: '',
+    emailForDigitalSignature: '',
     documents: {},
     acceptedTerms: false,
     acceptedPrivacy: false
@@ -51,7 +54,7 @@ const ClaimsForm = () => {
     const missingDocs = urlParams.get('missing');
     if (missingDocs) {
       // Jump to documents section if specific documents are missing
-      setCurrentStep(8); // Documents section step
+      setCurrentStep(9); // Documents section step (adjusted for new signature step)
     }
   }, [location]);
 
@@ -64,68 +67,29 @@ const ClaimsForm = () => {
 
   const getSteps = () => {
     const baseSteps = [
-      {
-        id: 'contact',
-        title: 'Información de Contacto',
-        component: ContactInfo
-      },
-      {
-        id: 'insurance',
-        title: 'Aseguradora',
-        component: InsuranceCompany
-      },
-      {
-        id: 'claimType',
-        title: 'Tipo de Reclamo',
-        component: ClaimType
-      }
+      { id: 'contact', title: 'Información de Contacto', component: ContactInfo },
+      { id: 'insurance', title: 'Aseguradora', component: InsuranceCompany },
+      { id: 'claimType', title: 'Tipo de Reclamo', component: ClaimType }
     ];
 
     if (formData.claimType === 'reembolso') {
       baseSteps.push(
-        {
-          id: 'reimbursement',
-          title: 'Detalles del Reembolso',
-          component: ReimbursementDetails
-        },
-        {
-          id: 'services',
-          title: 'Tipos de Servicio',
-          component: ServiceTypes
-        },
-        {
-          id: 'description',
-          title: 'Descripción del Siniestro',
-          component: SinisterDescription
-        }
+        { id: 'reimbursement', title: 'Detalles del Reembolso', component: ReimbursementDetails },
+        { id: 'services', title: 'Tipos de Servicio', component: ServiceTypes },
+        { id: 'description', title: 'Descripción del Siniestro', component: SinisterDescription }
       );
     } else if (formData.claimType === 'programacion') {
       baseSteps.push(
-        {
-          id: 'programming',
-          title: 'Detalles de Programación',
-          component: ProgrammingDetails
-        }
+        { id: 'programming', title: 'Detalles de Programación', component: ProgrammingDetails }
       );
     }
 
     if (formData.claimType && formData.claimType !== 'maternidad') {
       baseSteps.push(
-        {
-          id: 'persons',
-          title: 'Personas Involucradas',
-          component: PersonsInvolved
-        },
-        {
-          id: 'documents',
-          title: 'Documentos',
-          component: DocumentsSection
-        },
-        {
-          id: 'terms',
-          title: 'Términos y Condiciones',
-          component: TermsAndConditions
-        }
+        { id: 'persons', title: 'Personas Involucradas', component: PersonsInvolved },
+        { id: 'signature', title: 'Documentos de Firma', component: SignatureDocuments },
+        { id: 'documents', title: 'Documentos', component: DocumentsSection },
+        { id: 'terms', title: 'Términos y Condiciones', component: TermsAndConditions }
       );
     }
 
@@ -138,31 +102,65 @@ const ClaimsForm = () => {
   const canProceed = () => {
     switch (currentStepData?.id) {
       case 'contact':
-        return formData.contactInfo.nombres && formData.contactInfo.apellidoPaterno && formData.contactInfo.apellidoMaterno && formData.contactInfo.email && formData.contactInfo.telefono;
+        return formData.contactInfo.nombres && formData.contactInfo.apellidoPaterno && 
+               formData.contactInfo.apellidoMaterno && formData.contactInfo.email && 
+               formData.contactInfo.telefono;
       case 'insurance':
         return formData.insuranceCompany;
       case 'claimType':
         return formData.claimType;
       case 'reimbursement':
-        return formData.reimbursementType && (formData.reimbursementType === 'inicial' || formData.claimNumber);
+        return formData.reimbursementType && 
+               (formData.reimbursementType === 'inicial' || formData.claimNumber);
       case 'services':
         return formData.serviceTypes.length > 0;
       case 'description':
         return formData.sinisterDescription.trim().length > 10;
       case 'programming':
         return formData.programmingService && 
-          (formData.programmingService !== 'cirugia' || 
-           formData.insuranceCompany !== 'gnp' || 
-           formData.isCirugiaOrtopedica !== undefined);
+               (formData.programmingService !== 'cirugia' || 
+                formData.insuranceCompany !== 'gnp' || 
+                formData.isCirugiaOrtopedica !== undefined);
       case 'persons':
         // Check if at least titular asegurado has required fields
         const titular = formData.personsInvolved.titularAsegurado || {};
-        return titular.nombres && titular.apellidoPaterno && titular.apellidoMaterno && titular.email && titular.telefono;
+        return titular.nombres && titular.apellidoPaterno && titular.apellidoMaterno && 
+               titular.email && titular.telefono;
+      case 'signature':
+        // Check if signature document option is selected
+        const hasSignatureDocs = getSignatureDocuments().length > 0;
+        if (!hasSignatureDocs) return true; // Skip if no signature documents needed
+        return formData.signatureDocumentOption && 
+               (formData.signatureDocumentOption !== 'email' || formData.emailForDigitalSignature);
       case 'terms':
         return formData.acceptedTerms && formData.acceptedPrivacy;
       default:
         return true;
     }
+  };
+
+  const getSignatureDocuments = () => {
+    const documents = [];
+    const { insuranceCompany, claimType, programmingService, isCirugiaOrtopedica } = formData;
+
+    if (insuranceCompany === 'gnp') {
+      if (claimType === 'reembolso') {
+        documents.push('aviso-accidente-enfermedad', 'formato-reembolso', 'formato-unico-bancario');
+      } else if (claimType === 'programacion') {
+        documents.push('aviso-accidente-enfermedad-prog');
+        if (programmingService === 'cirugia' && isCirugiaOrtopedica === true) {
+          documents.push('formato-cirugia-traumatologia');
+        }
+      }
+    } else if (insuranceCompany === 'axa') {
+      if (claimType === 'programacion') {
+        documents.push('solicitud-programacion-axa');
+      } else if (claimType === 'reembolso') {
+        documents.push('solicitud-reembolso-axa');
+      }
+    }
+
+    return documents;
   };
 
   const nextStep = () => {
@@ -200,6 +198,8 @@ const ClaimsForm = () => {
         titular_asegurado: formData.personsInvolved.titularAsegurado || null,
         asegurado_afectado: formData.personsInvolved.aseguradoAfectado || null,
         titular_cuenta: formData.personsInvolved.titularCuenta || null,
+        opcion_documentos_firma: formData.signatureDocumentOption || null,
+        email_firma_digital: formData.emailForDigitalSignature || null,
         documentos: formData.documents || {},
         estado: 'Enviado',
         aceptacion_terminos: formData.acceptedTerms,
@@ -215,17 +215,17 @@ const ClaimsForm = () => {
       if (error) {
         throw error;
       }
-      
+
       console.log('Reclamo enviado exitosamente:', data);
-      
+
       // Navegar a la página de agradecimiento con los datos del reclamo
-      navigate('/thank-you', { 
-        state: { 
+      navigate('/thank-you', {
+        state: {
           formData: formData,
-          submissionId: data[0].id 
-        } 
+          submissionId: data[0].id
+        }
       });
-      
+
     } catch (error) {
       console.error('Error al enviar el reclamo:', error);
       setSubmitError('Hubo un error al enviar el formulario. Por favor intenta de nuevo.');
@@ -266,10 +266,10 @@ const ClaimsForm = () => {
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Progress Bar */}
-        <FormProgress
-          currentStep={currentStep}
-          totalSteps={steps.length}
-          steps={steps}
+        <FormProgress 
+          currentStep={currentStep} 
+          totalSteps={steps.length} 
+          steps={steps} 
         />
 
         {/* Form Content */}
@@ -297,9 +297,9 @@ const ClaimsForm = () => {
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ duration: 0.3 }}
               >
-                <CurrentStepComponent
-                  formData={formData}
-                  updateFormData={updateFormData}
+                <CurrentStepComponent 
+                  formData={formData} 
+                  updateFormData={updateFormData} 
                 />
               </motion.div>
             )}

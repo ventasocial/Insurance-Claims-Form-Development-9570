@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
@@ -225,12 +225,12 @@ const ThankYouPage = () => {
             © 2024 Fortex. Todos los derechos reservados.
           </p>
           <div className="mt-2 flex justify-center gap-4 text-sm">
-            <a href="/terms" className="text-gray-500 hover:text-[#204499] transition-colors">
+            <Link to="/terms" className="text-gray-500 hover:text-[#204499] transition-colors">
               Términos y Condiciones
-            </a>
-            <a href="/privacy" className="text-gray-500 hover:text-[#204499] transition-colors">
+            </Link>
+            <Link to="/privacy" className="text-gray-500 hover:text-[#204499] transition-colors">
               Política de Privacidad
-            </a>
+            </Link>
           </div>
         </div>
       </footer>

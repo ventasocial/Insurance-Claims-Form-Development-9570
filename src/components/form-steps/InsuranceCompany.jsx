@@ -6,12 +6,12 @@ const InsuranceCompany = ({ formData, updateFormData }) => {
     {
       id: 'gnp',
       name: 'GNP',
-      logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/GNP_Seguros_logo.svg/1200px-GNP_Seguros_logo.svg.png'
+      logo: 'https://storage.googleapis.com/msgsndr/HWRXLf7lstECUAG07eRw/media/6889b7c3c625b807234efbbb.png'
     },
     {
       id: 'axa',
-      name: 'AXA',
-      logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/26/AXA_Logo.svg/1200px-AXA_Logo.svg.png'
+      name: 'AXA', 
+      logo: 'https://storage.googleapis.com/msgsndr/HWRXLf7lstECUAG07eRw/media/6889b7c3b67b66d426854871.png'
     },
     {
       id: 'qualitas',
