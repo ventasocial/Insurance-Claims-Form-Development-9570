@@ -13,7 +13,7 @@ export class WebhookService {
     try {
       console.log(`🚀 Triggering webhooks for event: ${event}`);
       console.log('📦 Data to send:', data);
-      
+
       // Obtener todos los webhooks activos que escuchan este evento
       const { data: webhooks, error } = await supabase
         .from('webhooks_r2x4')
@@ -43,12 +43,12 @@ export class WebhookService {
       console.log('📤 Final payload:', JSON.stringify(payload, null, 2));
 
       // Disparar cada webhook usando la función Edge de Supabase
-      const webhookPromises = webhooks.map(webhook => 
+      const webhookPromises = webhooks.map(webhook =>
         this.sendWebhookViaEdgeFunction(webhook, payload)
       );
 
       const results = await Promise.allSettled(webhookPromises);
-      
+
       // Log results
       results.forEach((result, index) => {
         if (result.status === 'fulfilled') {
@@ -80,7 +80,7 @@ export class WebhookService {
   static async sendWebhookViaEdgeFunction(webhook, payload) {
     try {
       console.log(`📡 Sending webhook via Edge Function to: ${webhook.name} (${webhook.url})`);
-      
+
       // Parsear headers de manera segura
       let parsedHeaders = {};
       try {
@@ -112,155 +112,25 @@ export class WebhookService {
 
       if (error) {
         console.error(`❌ Edge function error for webhook ${webhook.name}:`, error);
-        
         // Log del error
         await this.logWebhookResult(webhook.id, payload, false, 0, error.message);
         return;
       }
 
       console.log(`✅ Webhook sent successfully via Edge Function to ${webhook.name}:`, data);
-      
+
       // Log del resultado exitoso
       await this.logWebhookResult(
-        webhook.id, 
-        payload, 
-        data.success, 
-        data.status_code, 
+        webhook.id,
+        payload,
+        data.success,
+        data.status_code,
         data.response_body
       );
-
     } catch (error) {
       console.error(`💥 Error sending webhook via Edge Function to ${webhook.name}:`, error);
-      
       // Log del error
       await this.logWebhookResult(webhook.id, payload, false, 0, error.message);
-    }
-  }
-
-  /**
-   * Envía un webhook directamente (fallback para casos específicos)
-   * @param {Object} webhook - Configuración del webhook
-   * @param {Object} payload - Datos a enviar
-   */
-  static async sendWebhookDirect(webhook, payload) {
-    console.log(`⚠️ Using direct method (fallback) for ${webhook.name}`);
-    
-    try {
-      console.log(`📡 Sending webhook directly to: ${webhook.name} (${webhook.url})`);
-      
-      // Validar URL
-      if (!webhook.url || (!webhook.url.startsWith('http://') && !webhook.url.startsWith('https://'))) {
-        throw new Error('Invalid webhook URL format');
-      }
-
-      const headers = this.prepareHeaders(webhook, payload);
-
-      // Configuración para la petición directa
-      const fetchOptions = {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify(payload),
-        mode: 'no-cors', // Cambiar a no-cors para evitar problemas de CORS
-        credentials: 'omit',
-        redirect: 'follow'
-      };
-
-      // Usar AbortController para timeout
-      const controller = new AbortController();
-      const timeoutDuration = this.isAlbatoUrl(webhook.url) ? 45000 : 30000;
-      const timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
-
-      fetchOptions.signal = controller.signal;
-
-      const response = await fetch(webhook.url, fetchOptions);
-      clearTimeout(timeoutId);
-
-      // Con mode: 'no-cors', no podemos leer la respuesta, pero podemos detectar si llegó
-      const success = true; // Asumimos éxito si no hay error
-      const statusCode = response.type === 'opaque' ? 200 : response.status;
-
-      // Log del resultado
-      await this.logWebhookResult(webhook.id, payload, success, statusCode, 'Direct request sent (no-cors mode)');
-
-      console.log(`✅ Webhook sent directly to ${webhook.name} (assumed success due to no-cors mode)`);
-
-    } catch (error) {
-      console.error(`💥 Error sending webhook directly to ${webhook.name}:`, error);
-      
-      let errorMessage = error.message;
-      let statusCode = 0;
-
-      if (error.name === 'AbortError') {
-        errorMessage = `Request timeout (${this.isAlbatoUrl(webhook.url) ? '45' : '30'}s)`;
-        statusCode = 408;
-      }
-
-      // Log del error
-      await this.logWebhookResult(webhook.id, payload, false, statusCode, errorMessage);
-    }
-  }
-
-  /**
-   * Prepara headers específicos para el webhook
-   * @param {Object} webhook - Configuración del webhook
-   * @param {Object} payload - Datos a enviar
-   */
-  static prepareHeaders(webhook, payload) {
-    // Parsear headers de manera segura
-    let parsedHeaders = {};
-    try {
-      parsedHeaders = webhook.headers ? JSON.parse(webhook.headers) : {};
-    } catch (e) {
-      console.warn('Invalid headers JSON, using empty object:', e);
-      parsedHeaders = {};
-    }
-
-    const baseHeaders = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'User-Agent': 'Fortex-Webhook/1.0',
-      'X-Webhook-Event': payload.event,
-      'X-Webhook-Timestamp': payload.timestamp,
-      'X-Webhook-Source': 'fortex-claims-portal'
-    };
-
-    // Headers específicos para Albato
-    if (this.isAlbatoUrl(webhook.url)) {
-      baseHeaders['X-Requested-With'] = 'XMLHttpRequest';
-      baseHeaders['Cache-Control'] = 'no-cache';
-    }
-
-    return { ...baseHeaders, ...parsedHeaders };
-  }
-
-  /**
-   * Registra el resultado de un webhook en la base de datos
-   * @param {string} webhookId - ID del webhook
-   * @param {Object} payload - Datos enviados
-   * @param {boolean} success - Si fue exitoso
-   * @param {number} statusCode - Código de estado HTTP
-   * @param {string} responseBody - Cuerpo de la respuesta
-   */
-  static async logWebhookResult(webhookId, payload, success, statusCode, responseBody) {
-    try {
-      const logData = {
-        webhook_id: webhookId,
-        event: payload.event,
-        status_code: statusCode,
-        success: success,
-        response_body: responseBody,
-        payload: JSON.stringify(payload),
-        sent_at: new Date().toISOString(),
-        retry_count: 0
-      };
-
-      await supabase
-        .from('webhook_logs_r2x4')
-        .insert([logData]);
-        
-      console.log(`📝 Logged webhook result: ${success ? 'SUCCESS' : 'FAILED'} (${statusCode})`);
-    } catch (error) {
-      console.error('💥 Error logging webhook result:', error);
     }
   }
 
@@ -272,77 +142,30 @@ export class WebhookService {
     try {
       console.log(`🔍 Testing connectivity to: ${url}`);
 
-      // Método 1: Intentar con Edge Function primero
-      try {
-        const { data, error } = await supabase.functions.invoke('test-webhook-connectivity', {
-          body: { webhook_url: url }
-        });
-
-        if (!error && data) {
-          console.log('✅ Edge function connectivity test successful:', data);
-          return {
-            success: data.success,
-            status: data.status_code || 200,
-            statusText: data.response_body || 'OK',
-            method: 'edge-function'
-          };
-        }
-      } catch (edgeError) {
-        console.warn('⚠️ Edge function test failed, trying direct method:', edgeError);
-      }
-
-      // Método 2: Prueba directa con no-cors (fallback)
-      const testPayload = {
-        event: 'connectivity_test',
-        timestamp: new Date().toISOString(),
-        test: true,
-        data: {
-          message: 'Test de conectividad desde Fortex',
-          source: 'fortex-claims-portal'
-        }
-      };
-
-      const headers = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'User-Agent': 'Fortex-Webhook-Test/1.0',
-        'X-Test-Request': 'true'
-      };
-
-      // Headers específicos para Albato
-      if (this.isAlbatoUrl(url)) {
-        headers['X-Requested-With'] = 'XMLHttpRequest';
-        headers['Cache-Control'] = 'no-cache';
-      }
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify(testPayload),
-        mode: 'no-cors', // Usar no-cors para evitar problemas de CORS
-        credentials: 'omit',
-        redirect: 'follow',
-        signal: controller.signal
+      // Usar Edge Function para probar conectividad
+      const { data, error } = await supabase.functions.invoke('test-webhook-connectivity', {
+        body: { webhook_url: url }
       });
 
-      clearTimeout(timeoutId);
+      if (error) {
+        console.error('❌ Edge function connectivity test failed:', error);
+        return {
+          success: false,
+          error: error.message,
+          method: 'edge-function-failed'
+        };
+      }
 
-      // Con no-cors, response.type será 'opaque' si la petición llegó
-      const success = response.type === 'opaque' || response.ok;
-
+      console.log('✅ Edge function connectivity test result:', data);
       return {
-        success: success,
-        status: success ? 200 : 0,
-        statusText: success ? 'Connection successful (no-cors mode)' : 'Connection failed',
-        method: 'direct-no-cors'
+        success: data.success,
+        status: data.status_code || 200,
+        statusText: data.response_body || 'OK',
+        method: 'edge-function',
+        is_albato: data.is_albato
       };
-
     } catch (error) {
       console.error('💥 Connectivity test failed:', error);
-      
       return {
         success: false,
         error: error.message,
@@ -353,7 +176,7 @@ export class WebhookService {
   }
 
   /**
-   * Prueba un webhook con datos completos usando diferentes métodos
+   * Prueba un webhook con datos completos usando Edge Function
    * @param {Object} webhook - Configuración del webhook
    */
   static async testWebhookComplete(webhook) {
@@ -424,30 +247,16 @@ export class WebhookService {
 
       console.log('🧪 Test payload prepared:', JSON.stringify(payload, null, 2));
 
-      // Método 1: Intentar con Edge Function primero
-      try {
-        const result = await this.sendWebhookViaEdgeFunction(webhook, payload);
-        return {
-          success: true,
-          message: 'Test enviado via Edge Function',
-          method: 'edge-function'
-        };
-      } catch (edgeError) {
-        console.warn('⚠️ Edge function test failed, trying direct method:', edgeError);
-      }
+      // Enviar usando Edge Function
+      await this.sendWebhookViaEdgeFunction(webhook, payload);
 
-      // Método 2: Envío directo con no-cors (fallback)
-      await this.sendWebhookDirect(webhook, payload);
-      
       return {
         success: true,
-        message: 'Test enviado directamente (no-cors mode)',
-        method: 'direct-no-cors'
+        message: 'Test enviado via Edge Function',
+        method: 'edge-function'
       };
-
     } catch (error) {
       console.error('💥 Complete webhook test failed:', error);
-      
       return {
         success: false,
         error: error.message,
@@ -496,13 +305,57 @@ export class WebhookService {
         throw new Error('Invalid payload JSON in log');
       }
 
+      // Actualizar el retry count
+      payload.retry_count = (log.retry_count || 0) + 1;
+
       // Enviar el webhook usando Edge Function
       await this.sendWebhookViaEdgeFunction(webhook, payload);
 
-      return { success: true, message: 'Webhook retry initiated' };
+      return {
+        success: true,
+        message: 'Webhook retry initiated'
+      };
     } catch (error) {
       console.error('Error in manual retry:', error);
-      return { success: false, message: error.message };
+      return {
+        success: false,
+        message: error.message
+      };
+    }
+  }
+
+  /**
+   * Registra el resultado de un webhook en la base de datos
+   * @param {string} webhookId - ID del webhook
+   * @param {Object} payload - Datos enviados
+   * @param {boolean} success - Si fue exitoso
+   * @param {number} statusCode - Código de estado HTTP
+   * @param {string} responseBody - Cuerpo de la respuesta
+   */
+  static async logWebhookResult(webhookId, payload, success, statusCode, responseBody) {
+    try {
+      const logData = {
+        webhook_id: webhookId,
+        event: payload.event,
+        status_code: statusCode,
+        success: success,
+        response_body: responseBody || '',
+        payload: JSON.stringify(payload),
+        sent_at: new Date().toISOString(),
+        retry_count: payload.retry_count || 0
+      };
+
+      const { error } = await supabase
+        .from('webhook_logs_r2x4')
+        .insert([logData]);
+
+      if (error) {
+        console.error('💥 Error logging webhook result:', error);
+      } else {
+        console.log(`📝 Logged webhook result: ${success ? 'SUCCESS' : 'FAILED'} (${statusCode})`);
+      }
+    } catch (error) {
+      console.error('💥 Error logging webhook result:', error);
     }
   }
 
@@ -570,7 +423,7 @@ export class WebhookService {
   static async transformFormDataForWebhook(formData, submissionId) {
     console.log('🔄 Transforming form data for webhook...');
     console.log('📋 Original form data:', formData);
-    
+
     // Obtener URLs públicas de los documentos
     const documentUrls = await this.getDocumentPublicUrls(submissionId, formData.documents);
 
@@ -586,7 +439,7 @@ export class WebhookService {
         telefono: formData.contactInfo?.telefono,
         full_name: `${formData.contactInfo?.nombres || ''} ${formData.contactInfo?.apellidoPaterno || ''} ${formData.contactInfo?.apellidoMaterno || ''}`.trim()
       },
-
+      
       // Información del reclamo
       claim_info: {
         insurance_company: formData.insuranceCompany,
@@ -597,17 +450,17 @@ export class WebhookService {
         programming_service: formData.programmingService,
         surgery_type: formData.isCirugiaOrtopedica ? 'traumatologia_ortopedia_neurologia' : 'other'
       },
-
+      
       // Personas involucradas
       persons_involved: {
         titular_asegurado: this.transformPersonData(formData.personsInvolved?.titularAsegurado),
         asegurado_afectado: this.transformPersonData(formData.personsInvolved?.aseguradoAfectado),
         titular_cuenta: this.transformPersonData(formData.personsInvolved?.titularCuenta)
       },
-
+      
       // Descripción del siniestro
       sinister_description: formData.sinisterDescription,
-
+      
       // Información de documentos
       documents_info: {
         signature_option: formData.signatureDocumentOption,
@@ -615,13 +468,13 @@ export class WebhookService {
         uploaded_documents_count: this.countUploadedDocuments(formData.documents),
         document_urls: documentUrls // Incluir URLs de los documentos
       },
-
+      
       // Términos y condiciones
       legal_acceptance: {
         accepted_terms: formData.acceptedTerms,
         accepted_privacy: formData.acceptedPrivacy
       },
-
+      
       // Metadatos
       metadata: {
         created_at: new Date().toISOString(),
@@ -665,6 +518,7 @@ export class WebhookService {
         count += docArray.length;
       }
     });
+
     return count;
   }
 }
