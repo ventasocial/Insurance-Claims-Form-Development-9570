@@ -11,7 +11,8 @@ export class WebhookService {
    */
   static async triggerWebhooks(event, data) {
     try {
-      console.log(`Triggering webhooks for event: ${event}`);
+      console.log(`🚀 Triggering webhooks for event: ${event}`);
+      console.log('📦 Data to send:', data);
       
       // Obtener todos los webhooks activos que escuchan este evento
       const { data: webhooks, error } = await supabase
@@ -21,16 +22,16 @@ export class WebhookService {
         .contains('trigger_events', [event]);
 
       if (error) {
-        console.error('Error fetching webhooks:', error);
+        console.error('❌ Error fetching webhooks:', error);
         return;
       }
 
       if (!webhooks || webhooks.length === 0) {
-        console.log(`No active webhooks found for event: ${event}`);
+        console.log(`⚠️ No active webhooks found for event: ${event}`);
         return;
       }
 
-      console.log(`Found ${webhooks.length} active webhooks for event: ${event}`);
+      console.log(`✅ Found ${webhooks.length} active webhooks for event: ${event}`);
 
       // Preparar el payload del webhook
       const payload = {
@@ -39,15 +40,27 @@ export class WebhookService {
         data: data
       };
 
+      console.log('📤 Final payload:', JSON.stringify(payload, null, 2));
+
       // Disparar cada webhook usando la función Edge de Supabase
       const webhookPromises = webhooks.map(webhook => 
         this.sendWebhookViaEdgeFunction(webhook, payload)
       );
 
-      await Promise.allSettled(webhookPromises);
-      console.log(`Webhooks triggered for event: ${event}`);
+      const results = await Promise.allSettled(webhookPromises);
+      
+      // Log results
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          console.log(`✅ Webhook ${webhooks[index].name} sent successfully`);
+        } else {
+          console.error(`❌ Webhook ${webhooks[index].name} failed:`, result.reason);
+        }
+      });
+
+      console.log(`🎉 Webhooks triggered for event: ${event}`);
     } catch (error) {
-      console.error('Error triggering webhooks:', error);
+      console.error('💥 Error triggering webhooks:', error);
     }
   }
 
@@ -66,14 +79,14 @@ export class WebhookService {
    */
   static async sendWebhookViaEdgeFunction(webhook, payload) {
     try {
-      console.log(`Sending webhook via Edge Function to: ${webhook.name} (${webhook.url})`);
+      console.log(`📡 Sending webhook via Edge Function to: ${webhook.name} (${webhook.url})`);
       
       // Parsear headers de manera segura
       let parsedHeaders = {};
       try {
         parsedHeaders = webhook.headers ? JSON.parse(webhook.headers) : {};
       } catch (e) {
-        console.warn('Invalid headers JSON, using empty object:', e);
+        console.warn('⚠️ Invalid headers JSON, using empty object:', e);
         parsedHeaders = {};
       }
 
@@ -86,26 +99,38 @@ export class WebhookService {
         is_albato: this.isAlbatoUrl(webhook.url)
       };
 
+      console.log('📤 Sending to Edge Function:', {
+        webhook_url: webhook.url,
+        payload_size: JSON.stringify(payload).length,
+        is_albato: this.isAlbatoUrl(webhook.url)
+      });
+
       // Llamar a la función Edge de Supabase
       const { data, error } = await supabase.functions.invoke('send-webhook', {
         body: edgeFunctionPayload
       });
 
       if (error) {
-        console.error(`Edge function error for webhook ${webhook.name}:`, error);
+        console.error(`❌ Edge function error for webhook ${webhook.name}:`, error);
         
         // Log del error
         await this.logWebhookResult(webhook.id, payload, false, 0, error.message);
         return;
       }
 
-      console.log(`Webhook sent successfully via Edge Function to ${webhook.name}:`, data);
+      console.log(`✅ Webhook sent successfully via Edge Function to ${webhook.name}:`, data);
       
       // Log del resultado exitoso
-      await this.logWebhookResult(webhook.id, payload, data.success, data.status_code, data.response_body);
+      await this.logWebhookResult(
+        webhook.id, 
+        payload, 
+        data.success, 
+        data.status_code, 
+        data.response_body
+      );
 
     } catch (error) {
-      console.error(`Error sending webhook via Edge Function to ${webhook.name}:`, error);
+      console.error(`💥 Error sending webhook via Edge Function to ${webhook.name}:`, error);
       
       // Log del error
       await this.logWebhookResult(webhook.id, payload, false, 0, error.message);
@@ -118,8 +143,10 @@ export class WebhookService {
    * @param {Object} payload - Datos a enviar
    */
   static async sendWebhookDirect(webhook, payload) {
+    console.log(`⚠️ Using direct method (fallback) for ${webhook.name}`);
+    
     try {
-      console.log(`Sending webhook directly to: ${webhook.name} (${webhook.url})`);
+      console.log(`📡 Sending webhook directly to: ${webhook.name} (${webhook.url})`);
       
       // Validar URL
       if (!webhook.url || (!webhook.url.startsWith('http://') && !webhook.url.startsWith('https://'))) {
@@ -153,12 +180,12 @@ export class WebhookService {
       const statusCode = response.type === 'opaque' ? 200 : response.status;
 
       // Log del resultado
-      await this.logWebhookResult(webhook.id, payload, success, statusCode, null);
+      await this.logWebhookResult(webhook.id, payload, success, statusCode, 'Direct request sent (no-cors mode)');
 
-      console.log(`Webhook sent directly to ${webhook.name} (assumed success due to no-cors mode)`);
+      console.log(`✅ Webhook sent directly to ${webhook.name} (assumed success due to no-cors mode)`);
 
     } catch (error) {
-      console.error(`Error sending webhook directly to ${webhook.name}:`, error);
+      console.error(`💥 Error sending webhook directly to ${webhook.name}:`, error);
       
       let errorMessage = error.message;
       let statusCode = 0;
@@ -230,8 +257,10 @@ export class WebhookService {
       await supabase
         .from('webhook_logs_r2x4')
         .insert([logData]);
+        
+      console.log(`📝 Logged webhook result: ${success ? 'SUCCESS' : 'FAILED'} (${statusCode})`);
     } catch (error) {
-      console.error('Error logging webhook result:', error);
+      console.error('💥 Error logging webhook result:', error);
     }
   }
 
@@ -241,7 +270,7 @@ export class WebhookService {
    */
   static async testConnectivity(url) {
     try {
-      console.log(`Testing connectivity to: ${url}`);
+      console.log(`🔍 Testing connectivity to: ${url}`);
 
       // Método 1: Intentar con Edge Function primero
       try {
@@ -250,6 +279,7 @@ export class WebhookService {
         });
 
         if (!error && data) {
+          console.log('✅ Edge function connectivity test successful:', data);
           return {
             success: data.success,
             status: data.status_code || 200,
@@ -258,7 +288,7 @@ export class WebhookService {
           };
         }
       } catch (edgeError) {
-        console.warn('Edge function test failed, trying direct method:', edgeError);
+        console.warn('⚠️ Edge function test failed, trying direct method:', edgeError);
       }
 
       // Método 2: Prueba directa con no-cors (fallback)
@@ -311,7 +341,7 @@ export class WebhookService {
       };
 
     } catch (error) {
-      console.error('Connectivity test failed:', error);
+      console.error('💥 Connectivity test failed:', error);
       
       return {
         success: false,
@@ -328,15 +358,27 @@ export class WebhookService {
    */
   static async testWebhookComplete(webhook) {
     try {
-      console.log(`Testing webhook: ${webhook.name} (${webhook.url})`);
+      console.log(`🧪 Testing webhook: ${webhook.name} (${webhook.url})`);
 
       // Datos de prueba que simularían un reclamo real
       const testData = {
-        event: 'test_webhook',
-        timestamp: new Date().toISOString(),
-        data: {
-          submission_id: 'test-' + Date.now(),
-          contact_info: {
+        submission_id: 'test-' + Date.now(),
+        contact_info: {
+          nombres: 'Juan',
+          apellido_paterno: 'Pérez',
+          apellido_materno: 'García',
+          email: 'juan.perez@example.com',
+          telefono: '+528122334455',
+          full_name: 'Juan Pérez García'
+        },
+        claim_info: {
+          insurance_company: 'gnp',
+          claim_type: 'reembolso',
+          reimbursement_type: 'inicial',
+          service_types: ['hospital', 'medicamentos']
+        },
+        persons_involved: {
+          titular_asegurado: {
             nombres: 'Juan',
             apellido_paterno: 'Pérez',
             apellido_materno: 'García',
@@ -344,66 +386,58 @@ export class WebhookService {
             telefono: '+528122334455',
             full_name: 'Juan Pérez García'
           },
-          claim_info: {
-            insurance_company: 'gnp',
-            claim_type: 'reembolso',
-            reimbursement_type: 'inicial',
-            service_types: ['hospital', 'medicamentos']
-          },
-          persons_involved: {
-            titular_asegurado: {
-              nombres: 'Juan',
-              apellido_paterno: 'Pérez',
-              apellido_materno: 'García',
-              email: 'juan.perez@example.com',
-              telefono: '+528122334455',
-              full_name: 'Juan Pérez García'
-            },
-            asegurado_afectado: {
-              nombres: 'María',
-              apellido_paterno: 'Pérez',
-              apellido_materno: 'López',
-              email: 'maria.perez@example.com',
-              telefono: '+528122334456',
-              full_name: 'María Pérez López'
-            }
-          },
-          sinister_description: 'Descripción de prueba del siniestro',
-          documents_info: {
-            uploaded_documents_count: 5,
-            document_urls: {
-              'informe-medico': [
-                {
-                  name: 'informe-medico-test.pdf',
-                  type: 'application/pdf',
-                  size: 1024000,
-                  url: `${supabase.supabaseUrl}/storage/v1/object/public/claims/test-${Date.now()}/informe-medico/informe-medico-test.pdf`
-                }
-              ]
-            }
-          },
-          metadata: {
-            created_at: new Date().toISOString(),
-            status: 'Enviado',
-            source: 'fortex_claims_portal'
+          asegurado_afectado: {
+            nombres: 'María',
+            apellido_paterno: 'Pérez',
+            apellido_materno: 'López',
+            email: 'maria.perez@example.com',
+            telefono: '+528122334456',
+            full_name: 'María Pérez López'
           }
+        },
+        sinister_description: 'Descripción de prueba del siniestro para verificar el webhook',
+        documents_info: {
+          uploaded_documents_count: 5,
+          document_urls: {
+            'informe-medico': [
+              {
+                name: 'informe-medico-test.pdf',
+                type: 'application/pdf',
+                size: 1024000,
+                url: `${supabase.supabaseUrl}/storage/v1/object/public/claims/test-${Date.now()}/informe-medico/informe-medico-test.pdf`
+              }
+            ]
+          }
+        },
+        metadata: {
+          created_at: new Date().toISOString(),
+          status: 'Test',
+          source: 'fortex_claims_portal'
         }
       };
 
+      const payload = {
+        event: 'test_webhook',
+        timestamp: new Date().toISOString(),
+        data: testData
+      };
+
+      console.log('🧪 Test payload prepared:', JSON.stringify(payload, null, 2));
+
       // Método 1: Intentar con Edge Function primero
       try {
-        const result = await this.sendWebhookViaEdgeFunction(webhook, testData);
+        const result = await this.sendWebhookViaEdgeFunction(webhook, payload);
         return {
           success: true,
           message: 'Test enviado via Edge Function',
           method: 'edge-function'
         };
       } catch (edgeError) {
-        console.warn('Edge function test failed, trying direct method:', edgeError);
+        console.warn('⚠️ Edge function test failed, trying direct method:', edgeError);
       }
 
       // Método 2: Envío directo con no-cors (fallback)
-      await this.sendWebhookDirect(webhook, testData);
+      await this.sendWebhookDirect(webhook, payload);
       
       return {
         success: true,
@@ -412,7 +446,7 @@ export class WebhookService {
       };
 
     } catch (error) {
-      console.error('Complete webhook test failed:', error);
+      console.error('💥 Complete webhook test failed:', error);
       
       return {
         success: false,
@@ -421,8 +455,6 @@ export class WebhookService {
       };
     }
   }
-
-  // ... resto de métodos sin cambios ...
 
   /**
    * Reenvía manualmente un webhook fallido
@@ -536,10 +568,13 @@ export class WebhookService {
    * @param {string} submissionId - ID de la submisión
    */
   static async transformFormDataForWebhook(formData, submissionId) {
+    console.log('🔄 Transforming form data for webhook...');
+    console.log('📋 Original form data:', formData);
+    
     // Obtener URLs públicas de los documentos
     const documentUrls = await this.getDocumentPublicUrls(submissionId, formData.documents);
 
-    return {
+    const transformedData = {
       submission_id: submissionId,
       
       // Información de contacto
@@ -595,6 +630,9 @@ export class WebhookService {
         bucket_base_url: `${supabase.supabaseUrl}/storage/v1/object/public/claims/${submissionId}`
       }
     };
+
+    console.log('✅ Transformed data:', transformedData);
+    return transformedData;
   }
 
   /**
