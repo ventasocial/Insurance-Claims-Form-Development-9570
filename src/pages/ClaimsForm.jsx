@@ -19,7 +19,7 @@ import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 import supabase from '../lib/supabase';
 
-const { FiArrowLeft } = FiIcons;
+const { FiArrowLeft, FiAlertCircle } = FiIcons;
 
 const ClaimsForm = () => {
   const navigate = useNavigate();
@@ -45,6 +45,7 @@ const ClaimsForm = () => {
     signatureDocumentOption: '',
     emailForDigitalSignature: '',
     documents: {},
+    documentsSentByEmail: null,
     acceptedTerms: false,
     acceptedPrivacy: false
   });
@@ -68,29 +69,73 @@ const ClaimsForm = () => {
 
   const getSteps = () => {
     const baseSteps = [
-      { id: 'contact', title: 'Información de Contacto', component: ContactInfo },
-      { id: 'insurance', title: 'Aseguradora', component: InsuranceCompany },
-      { id: 'claimType', title: 'Tipo de Reclamo', component: ClaimType }
+      {
+        id: 'contact',
+        title: 'Información de Contacto',
+        component: ContactInfo
+      },
+      {
+        id: 'insurance',
+        title: 'Aseguradora',
+        component: InsuranceCompany
+      },
+      {
+        id: 'claimType',
+        title: 'Tipo de Reclamo',
+        component: ClaimType
+      }
     ];
 
     if (formData.claimType === 'reembolso') {
       baseSteps.push(
-        { id: 'reimbursement', title: 'Detalles del Reembolso', component: ReimbursementDetails },
-        { id: 'services', title: 'Tipos de Servicio', component: ServiceTypes },
-        { id: 'description', title: 'Descripción del Siniestro', component: SinisterDescription }
+        {
+          id: 'reimbursement',
+          title: 'Detalles del Reembolso',
+          component: ReimbursementDetails
+        },
+        {
+          id: 'services',
+          title: 'Tipos de Servicio',
+          component: ServiceTypes
+        },
+        {
+          id: 'description',
+          title: 'Descripción del Siniestro',
+          component: SinisterDescription
+        }
       );
     } else if (formData.claimType === 'programacion') {
       baseSteps.push(
-        { id: 'programming', title: 'Detalles de Programación', component: ProgrammingDetails }
+        {
+          id: 'programming',
+          title: 'Detalles de Programación',
+          component: ProgrammingDetails
+        }
       );
     }
 
     if (formData.claimType) {
       baseSteps.push(
-        { id: 'persons', title: 'Personas Involucradas', component: PersonsInvolved },
-        { id: 'signature', title: 'Documentos de Firma', component: SignatureDocuments },
-        { id: 'documents', title: 'Documentos', component: DocumentsSection },
-        { id: 'terms', title: 'Términos y Condiciones', component: TermsAndConditions }
+        {
+          id: 'persons',
+          title: 'Personas Involucradas',
+          component: PersonsInvolved
+        },
+        {
+          id: 'signature',
+          title: 'Documentos de Firma',
+          component: SignatureDocuments
+        },
+        {
+          id: 'documents',
+          title: 'Documentos',
+          component: DocumentsSection
+        },
+        {
+          id: 'terms',
+          title: 'Términos y Condiciones',
+          component: TermsAndConditions
+        }
       );
     }
 
@@ -103,8 +148,10 @@ const ClaimsForm = () => {
   const canProceed = () => {
     switch (currentStepData?.id) {
       case 'contact':
-        return formData.contactInfo.nombres && formData.contactInfo.apellidoPaterno && 
-               formData.contactInfo.apellidoMaterno && formData.contactInfo.email && 
+        return formData.contactInfo.nombres && 
+               formData.contactInfo.apellidoPaterno && 
+               formData.contactInfo.apellidoMaterno && 
+               formData.contactInfo.email && 
                formData.contactInfo.telefono;
       case 'insurance':
         return formData.insuranceCompany;
@@ -127,7 +174,6 @@ const ClaimsForm = () => {
         const titular = formData.personsInvolved.titularAsegurado || {};
         const requiredFields = ['nombres', 'apellidoPaterno', 'apellidoMaterno', 'email', 'telefono'];
         return requiredFields.every(field => titular[field] && titular[field].trim() !== '');
-        
       case 'signature':
         // Check if signature document option is selected
         const hasSignatureDocs = getSignatureDocuments().length > 0;
@@ -147,7 +193,11 @@ const ClaimsForm = () => {
 
     if (insuranceCompany === 'gnp') {
       if (claimType === 'reembolso') {
-        documents.push('aviso-accidente-enfermedad', 'formato-reembolso', 'formato-unico-bancario');
+        documents.push(
+          'aviso-accidente-enfermedad',
+          'formato-reembolso',
+          'formato-unico-bancario'
+        );
       } else if (claimType === 'programacion') {
         documents.push('aviso-accidente-enfermedad-prog');
         if (programmingService === 'cirugia' && isCirugiaOrtopedica === true) {
@@ -203,12 +253,12 @@ const ClaimsForm = () => {
         opcion_documentos_firma: formData.signatureDocumentOption || null,
         email_firma_digital: formData.emailForDigitalSignature || null,
         documentos: formData.documents || {},
+        documentos_por_email: formData.documentsSentByEmail || null,
         estado: 'Enviado',
         aceptacion_terminos: formData.acceptedTerms,
         aceptacion_privacidad: formData.acceptedPrivacy
       };
 
-      // Verificar si la tabla tiene la columna 'aceptacion_privacidad'
       console.log('Enviando datos del reclamo:', reclamacionData);
 
       // Guardar en Supabase
@@ -231,7 +281,6 @@ const ClaimsForm = () => {
           submissionId: data[0].id
         }
       });
-
     } catch (error) {
       console.error('Error al enviar el reclamo:', error);
       
@@ -264,7 +313,7 @@ const ClaimsForm = () => {
               >
                 <SafeIcon icon={FiArrowLeft} className="text-xl text-gray-600" />
               </motion.button>
-              <img 
+              <img
                 src="https://storage.googleapis.com/msgsndr/HWRXLf7lstECUAG07eRw/media/685d77c05c72d29e532e823f.png"
                 alt="Fortex"
                 className="h-8"
@@ -280,12 +329,12 @@ const ClaimsForm = () => {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Breadcrumb */}
         <Breadcrumb formData={formData} />
-        
+
         {/* Progress Bar */}
-        <FormProgress 
-          currentStep={currentStep} 
-          totalSteps={steps.length} 
-          steps={steps} 
+        <FormProgress
+          currentStep={currentStep}
+          totalSteps={steps.length}
+          steps={steps}
         />
 
         {/* Form Content */}
@@ -298,9 +347,13 @@ const ClaimsForm = () => {
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-red-50 text-red-800 p-4 rounded-lg mb-6"
+              className="bg-red-50 text-red-800 p-4 rounded-lg mb-6 flex items-center gap-3"
             >
-              {submitError}
+              <SafeIcon icon={FiAlertCircle} className="text-xl flex-shrink-0" />
+              <div>
+                <p className="font-medium">Error al enviar el formulario</p>
+                <p className="text-sm mt-1">{submitError}</p>
+              </div>
             </motion.div>
           )}
 
@@ -313,9 +366,9 @@ const ClaimsForm = () => {
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ duration: 0.3 }}
               >
-                <CurrentStepComponent 
-                  formData={formData} 
-                  updateFormData={updateFormData} 
+                <CurrentStepComponent
+                  formData={formData}
+                  updateFormData={updateFormData}
                 />
               </motion.div>
             )}

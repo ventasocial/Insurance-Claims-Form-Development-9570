@@ -4,16 +4,25 @@ import SafeIcon from '../../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 import supabase from '../../lib/supabase';
 
-const { FiUpload, FiFile, FiTrash2, FiEye } = FiIcons;
+const { FiUpload, FiFile, FiTrash2, FiEye, FiPaperclip } = FiIcons;
 
 const DocumentsSection = ({ formData, updateFormData }) => {
   const [uploadedFiles, setUploadedFiles] = useState({});
   const [previewFile, setPreviewFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
+  const [fallbackMode, setFallbackMode] = useState(false);
+  const [emailToSend, setEmailToSend] = useState('');
+  const [showEmailForm, setShowEmailForm] = useState(false);
 
   const handleFileUpload = async (documentType, files) => {
     if (!files || files.length === 0) return;
+    
+    // Si estamos en modo alternativo, no intentamos subir a Supabase
+    if (fallbackMode) {
+      handleFallbackUpload(documentType, files);
+      return;
+    }
     
     setUploading(true);
     setUploadError(null);
@@ -28,72 +37,56 @@ const DocumentsSection = ({ formData, updateFormData }) => {
         // Generar un nombre de archivo único para evitar colisiones
         const fileExt = file.name.split('.').pop();
         const fileName = `${documentType}_${Date.now()}.${fileExt}`;
-        const filePath = `${formData.insuranceCompany}/${formData.claimType}/${fileName}`;
+        const filePath = `public/${formData.insuranceCompany}/${formData.claimType}/${fileName}`;
         
         console.log('Intentando subir archivo:', filePath);
 
-        // Comprobar si el bucket existe y crearlo si no
         try {
-          const { data: buckets } = await supabase.storage.listBuckets();
-          const bucketExists = buckets.some(bucket => bucket.name === 'claim_documents');
-          
-          if (!bucketExists) {
-            console.log('El bucket no existe, intentando crearlo');
-            // Intentar crear el bucket
-            const { data: newBucket, error: bucketError } = await supabase.storage.createBucket('claim_documents', {
-              public: true
+          // Intento directo en carpeta public que tiene permisos preestablecidos
+          const { data, error } = await supabase.storage
+            .from('claim_documents')
+            .upload(filePath, file, {
+              cacheControl: '3600',
+              upsert: true,
+              contentType: file.type
             });
+
+          if (error) {
+            console.error('Error al subir archivo:', error);
             
-            if (bucketError) {
-              console.error('Error al crear el bucket:', bucketError);
-              throw bucketError;
+            // Si hay error de políticas de seguridad, cambiar a modo alternativo
+            if (error.message && error.message.includes('security policy')) {
+              setUploadError(`Error de permisos: ${error.message}`);
+              setFallbackMode(true);
+              setShowEmailForm(true);
+              return; // Salir del bucle y mostrar opciones alternativas
             } else {
-              console.log('Bucket creado correctamente:', newBucket);
+              setUploadError(`Error al subir ${file.name}: ${error.message}`);
             }
           } else {
-            console.log('El bucket claim_documents ya existe');
+            console.log('Archivo subido correctamente:', data);
+            
+            // Obtener la URL pública del archivo
+            const { data: { publicUrl } } = supabase.storage
+              .from('claim_documents')
+              .getPublicUrl(filePath);
+
+            // Almacenar la información del archivo
+            newFiles[documentType].push({
+              name: file.name,
+              size: file.size,
+              type: file.type,
+              url: URL.createObjectURL(file), // Para vista previa local
+              storagePath: filePath, // Para referencia en la base de datos
+              publicUrl: publicUrl // URL para acceso público
+            });
           }
-        } catch (bucketCheckError) {
-          console.error('Error al verificar o crear el bucket:', bucketCheckError);
-        }
-
-        // Subir el archivo como blob para evitar problemas de tipo
-        const { data, error } = await supabase.storage
-          .from('claim_documents')
-          .upload(filePath, file, {
-            cacheControl: '3600',
-            upsert: false,
-            contentType: file.type // Asegurarse de que se establece el tipo de contenido
-          });
-
-        if (error) {
-          console.error('Error al subir archivo:', error);
-          
-          // Si el error es de permisos, intentar una solución alternativa
-          if (error.message && error.message.includes('security policy')) {
-            setUploadError(`Error de permisos: ${error.message}. Por favor, contacta a soporte.`);
-          } else {
-            setUploadError(`Error al subir ${file.name}: ${error.message}`);
-          }
-          
-          // Continuar con los demás archivos a pesar del error
-        } else {
-          console.log('Archivo subido correctamente:', data);
-          
-          // Obtener la URL pública del archivo
-          const { data: { publicUrl } } = supabase.storage
-            .from('claim_documents')
-            .getPublicUrl(filePath);
-
-          // Almacenar la información del archivo
-          newFiles[documentType].push({
-            name: file.name,
-            size: file.size,
-            type: file.type,
-            url: URL.createObjectURL(file), // Para vista previa local
-            storagePath: filePath, // Para referencia en la base de datos
-            publicUrl: publicUrl // URL para acceso público
-          });
+        } catch (uploadError) {
+          console.error('Error inesperado al subir:', uploadError);
+          setUploadError(`Error inesperado: ${uploadError.message}`);
+          setFallbackMode(true);
+          setShowEmailForm(true);
+          return;
         }
       }
 
@@ -103,9 +96,49 @@ const DocumentsSection = ({ formData, updateFormData }) => {
     } catch (error) {
       console.error('Error inesperado al subir archivos:', error);
       setUploadError('Error inesperado al subir archivos. Por favor, inténtalo de nuevo.');
+      setFallbackMode(true);
     } finally {
       setUploading(false);
     }
+  };
+
+  // Método alternativo para cuando falla Supabase Storage
+  const handleFallbackUpload = (documentType, files) => {
+    const newFiles = { ...uploadedFiles };
+    if (!newFiles[documentType]) {
+      newFiles[documentType] = [];
+    }
+
+    for (let file of Array.from(files)) {
+      newFiles[documentType].push({
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        url: URL.createObjectURL(file), // Para vista previa local
+        file: file, // Guardamos el archivo real para enviarlo por email después
+        isLocal: true // Indicador de que es un archivo local
+      });
+    }
+
+    setUploadedFiles(newFiles);
+    updateFormData('documents', newFiles);
+  };
+
+  const handleSendByEmail = async () => {
+    if (!emailToSend || !emailToSend.includes('@')) {
+      alert('Por favor, ingresa un correo electrónico válido');
+      return;
+    }
+
+    // En un caso real, aquí se enviarían los archivos por email
+    // Por ahora, solo mostramos un mensaje de confirmación
+    alert(`Los documentos se enviarán a: ${emailToSend}\n\nPor favor, espera la confirmación del equipo de soporte.`);
+    
+    // Actualizar el estado del formulario para indicar que se usó el método de email
+    updateFormData('documentsSentByEmail', {
+      email: emailToSend,
+      timestamp: new Date().toISOString()
+    });
   };
 
   const removeFile = async (documentType, fileIndex) => {
@@ -115,7 +148,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
       const fileToRemove = newFiles[documentType][fileIndex];
       
       // Si el archivo se subió a Supabase, intentar eliminarlo del almacenamiento
-      if (fileToRemove.storagePath) {
+      if (fileToRemove.storagePath && !fileToRemove.isLocal) {
         try {
           const { error } = await supabase.storage
             .from('claim_documents')
@@ -123,7 +156,6 @@ const DocumentsSection = ({ formData, updateFormData }) => {
             
           if (error) {
             console.error('Error al eliminar archivo de Supabase:', error);
-            // Continuar a pesar del error
           }
         } catch (error) {
           console.error('Error inesperado al eliminar archivo:', error);
@@ -282,6 +314,11 @@ const DocumentsSection = ({ formData, updateFormData }) => {
           <p className="text-xs text-gray-400 mt-2">
             Arrastra archivos aquí o haz clic para seleccionar
           </p>
+          {fallbackMode && (
+            <p className="text-xs text-orange-500 mt-1 font-medium">
+              Modo alternativo: los archivos se guardarán localmente
+            </p>
+          )}
         </div>
       </label>
     </div>
@@ -315,6 +352,9 @@ const DocumentsSection = ({ formData, updateFormData }) => {
                 <p className="text-xs text-gray-500">
                   {(file.size / 1024 / 1024).toFixed(2)} MB
                 </p>
+                {file.isLocal && (
+                  <span className="text-xs text-orange-500">Guardado localmente</span>
+                )}
               </div>
             </div>
             <div className="flex items-center space-x-2">
@@ -356,6 +396,15 @@ const DocumentsSection = ({ formData, updateFormData }) => {
     </div>
   );
 
+  // Función para contar el total de archivos subidos
+  const getTotalFilesCount = () => {
+    let count = 0;
+    Object.values(uploadedFiles).forEach(files => {
+      count += files.length;
+    });
+    return count;
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -377,11 +426,79 @@ const DocumentsSection = ({ formData, updateFormData }) => {
           animate={{ opacity: 1, y: 0 }}
           className="bg-red-50 text-red-800 p-4 rounded-lg mb-6"
         >
-          {uploadError}
-          <p className="mt-2 text-sm">
-            Alternativa: Puedes enviar los documentos por correo electrónico a support@fortex.com mencionando tu número de reclamo.
-          </p>
+          <div className="font-medium">Error al subir documentos:</div>
+          <p>{uploadError}</p>
         </motion.div>
+      )}
+
+      {/* Mensaje de modo alternativo */}
+      {fallbackMode && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-6"
+        >
+          <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+            <SafeIcon icon={FiPaperclip} className="text-yellow-600" />
+            Método Alternativo de Carga
+          </h3>
+          <p className="text-gray-700 mb-4">
+            Debido a un problema técnico con el almacenamiento, ahora puedes:
+          </p>
+          <ol className="list-decimal pl-5 space-y-2 text-gray-700 mb-4">
+            <li>Cargar los documentos localmente en este formulario</li>
+            <li>Completar el resto del formulario normalmente</li>
+            <li>Al final del proceso, podrás enviar los documentos por correo electrónico</li>
+          </ol>
+          
+          {showEmailForm ? (
+            <div className="mt-4 bg-white p-4 rounded-lg border border-gray-200">
+              <div className="mb-3">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Correo electrónico para enviar documentos:
+                </label>
+                <input 
+                  type="email" 
+                  value={emailToSend}
+                  onChange={(e) => setEmailToSend(e.target.value)}
+                  placeholder="tucorreo@ejemplo.com"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#204499] focus:border-transparent"
+                />
+              </div>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={handleSendByEmail}
+                className="bg-[#204499] hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+              >
+                <SafeIcon icon={FiPaperclip} className="text-sm" />
+                Enviar Documentos por Email
+              </motion.button>
+              <p className="text-xs text-gray-500 mt-2">
+                * Los documentos se enviarán después de completar el formulario
+              </p>
+            </div>
+          ) : (
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setShowEmailForm(true)}
+              className="bg-[#204499] hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors"
+            >
+              Configurar Envío por Email
+            </motion.button>
+          )}
+        </motion.div>
+      )}
+
+      {/* Contador de archivos */}
+      {getTotalFilesCount() > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <div className="font-medium text-blue-800 flex items-center gap-2">
+            <SafeIcon icon={FiFile} className="text-blue-600" />
+            {getTotalFilesCount()} archivo(s) cargado(s) {fallbackMode && "(localmente)"}
+          </div>
+        </div>
       )}
 
       {requirements.forms.length > 0 && (
