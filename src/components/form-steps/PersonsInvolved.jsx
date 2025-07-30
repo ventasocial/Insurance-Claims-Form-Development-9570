@@ -48,7 +48,7 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
     updateFormData('personsInvolved', {
       ...formData.personsInvolved,
       [personType]: {
-        ...formData.personsInvolved[personType],
+        ...(formData.personsInvolved[personType] || {}),
         [field]: value
       }
     });
@@ -63,14 +63,22 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
         telefono: formData.contactInfo?.telefono || '',
         email: formData.contactInfo?.email || ''
       };
+      
       updateFormData('personsInvolved', {
         ...formData.personsInvolved,
         [personType]: contactData
       });
     } else {
+      // Al desmarcar, limpiamos los campos pero mantenemos la estructura
       updateFormData('personsInvolved', {
         ...formData.personsInvolved,
-        [personType]: {}
+        [personType]: {
+          nombres: '',
+          apellidoPaterno: '',
+          apellidoMaterno: '',
+          telefono: '',
+          email: ''
+        }
       });
     }
   };
@@ -83,6 +91,7 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
       telefono: formData.contactInfo?.telefono || '',
       email: formData.contactInfo?.email || ''
     };
+    
     updateFormData('personsInvolved', {
       ...formData.personsInvolved,
       [personType]: contactData
@@ -92,6 +101,7 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
   const isContactDataSame = (personType) => {
     const personData = formData.personsInvolved[personType] || {};
     const contactInfo = formData.contactInfo || {};
+    
     return (
       personData.nombres === contactInfo.nombres &&
       personData.apellidoPaterno === contactInfo.apellidoPaterno &&
@@ -211,6 +221,23 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
       </div>
     );
   };
+
+  // Asegurar que los datos estén inicializados para todas las pestañas
+  useEffect(() => {
+    const initializedData = { ...formData.personsInvolved };
+    
+    // Inicializar cada tipo de persona con un objeto vacío si no existe
+    personTypes.forEach(type => {
+      if (!initializedData[type.id]) {
+        initializedData[type.id] = {};
+      }
+    });
+    
+    // Solo actualizar si es necesario
+    if (Object.keys(initializedData).length !== Object.keys(formData.personsInvolved || {}).length) {
+      updateFormData('personsInvolved', initializedData);
+    }
+  }, [personTypes]);
 
   return (
     <motion.div

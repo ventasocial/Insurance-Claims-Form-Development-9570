@@ -123,10 +123,11 @@ const ClaimsForm = () => {
                 formData.insuranceCompany !== 'gnp' || 
                 formData.isCirugiaOrtopedica !== undefined);
       case 'persons':
-        // Check if at least titular asegurado has required fields
+        // Verificar que al menos el titular del seguro tenga la información completa
         const titular = formData.personsInvolved.titularAsegurado || {};
-        return titular.nombres && titular.apellidoPaterno && titular.apellidoMaterno && 
-               titular.email && titular.telefono;
+        const requiredFields = ['nombres', 'apellidoPaterno', 'apellidoMaterno', 'email', 'telefono'];
+        return requiredFields.every(field => titular[field] && titular[field].trim() !== '');
+        
       case 'signature':
         // Check if signature document option is selected
         const hasSignatureDocs = getSignatureDocuments().length > 0;
