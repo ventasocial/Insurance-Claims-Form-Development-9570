@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import SafeIcon from '../../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
+import supabase from '../../lib/supabase';
 
 const { FiUpload, FiFile, FiTrash2, FiEye, FiPaperclip, FiAlertCircle, FiCheckCircle } = FiIcons;
 
@@ -12,11 +13,47 @@ const DocumentsSection = ({ formData, updateFormData }) => {
   const [uploadError, setUploadError] = useState(null);
   const [emailToSend, setEmailToSend] = useState('');
   const [showEmailForm, setShowEmailForm] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({});
+
+  useEffect(() => {
+    // Crear el bucket 'claims' si no existe
+    const createBucketIfNotExists = async () => {
+      try {
+        const { data, error } = await supabase.storage.getBucket('claims');
+        
+        if (error && error.code === 'PGRST116') { // Bucket not found
+          const { error: createError } = await supabase.storage.createBucket('claims', {
+            public: true, // Hacer el bucket público para poder acceder a los archivos
+          });
+          
+          if (createError) {
+            console.error('Error creating bucket:', createError);
+          } else {
+            console.log('Bucket "claims" created successfully');
+          }
+        }
+      } catch (err) {
+        console.error('Error checking bucket:', err);
+      }
+    };
+    
+    createBucketIfNotExists();
+  }, []);
 
   const handleFileUpload = async (documentType, files) => {
     if (!files || files.length === 0) return;
-    // For now, we'll store files locally due to storage limitations
-    handleLocalUpload(documentType, files);
+    setUploading(true);
+    setUploadError(null);
+    
+    try {
+      // Store files locally for now, actual upload to Supabase will happen on form submission
+      handleLocalUpload(documentType, files);
+    } catch (error) {
+      console.error('Error uploading files:', error);
+      setUploadError('Error al subir los archivos. Por favor intenta de nuevo.');
+    } finally {
+      setUploading(false);
+    }
   };
 
   // Store files locally for now
@@ -39,6 +76,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
 
     setUploadedFiles(newFiles);
     updateFormData('documents', newFiles);
+    
     // Show email form automatically
     setShowEmailForm(true);
   };
@@ -71,7 +109,6 @@ const DocumentsSection = ({ formData, updateFormData }) => {
       
       // Remove file from list
       newFiles[documentType].splice(fileIndex, 1);
-      
       if (newFiles[documentType].length === 0) {
         delete newFiles[documentType];
       }
@@ -122,7 +159,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
             title: 'Aviso de Accidente o Enfermedad',
             description: 'Formulario oficial para programación'
           });
-
+          
           if (formData.programmingService === 'cirugia' && formData.isCirugiaOrtopedica === true) {
             requirements.forms.push({
               id: 'formato-cirugia-traumatologia',
@@ -286,7 +323,21 @@ const DocumentsSection = ({ formData, updateFormData }) => {
         htmlFor={`upload-${document.id}`}
         className={`cursor-pointer flex flex-col items-center space-y-3 ${uploading ? 'opacity-50' : ''}`}
       >
-        {uploading ? (
+        {uploading && uploadProgress[document.id] ? (
+          <div className="w-12 h-12 relative">
+            <div className="absolute inset-0 rounded-full border-4 border-gray-200"></div>
+            <div 
+              className="absolute inset-0 rounded-full border-4 border-[#204499] border-t-transparent"
+              style={{ 
+                transform: `rotate(${uploadProgress[document.id] * 3.6}deg)`,
+                transition: 'transform 0.3s ease-in-out'
+              }}
+            ></div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-xs font-medium">{uploadProgress[document.id]}%</span>
+            </div>
+          </div>
+        ) : uploading ? (
           <div className="animate-spin w-8 h-8 border-2 border-[#204499] border-t-transparent rounded-full"></div>
         ) : (
           <SafeIcon icon={FiUpload} className="text-3xl text-gray-400" />
@@ -304,7 +355,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
 
   const FileList = ({ documentType }) => {
     const files = uploadedFiles[documentType] || [];
-
+    
     if (files.length === 0) {
       return (
         <div className="text-center py-8 text-gray-500">
@@ -313,7 +364,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
         </div>
       );
     }
-
+    
     return (
       <div className="space-y-3">
         {files.map((file, index) => (
@@ -389,7 +440,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
     if (!uploadedFiles['informe-medico'] || uploadedFiles['informe-medico'].length === 0) {
       return false;
     }
-
+    
     // Para los documentos de firma, solo verificamos si se eligió descarga física
     if (formData.signatureDocumentOption === 'download') {
       // Verificar que los documentos de firma estén cargados
@@ -400,18 +451,19 @@ const DocumentsSection = ({ formData, updateFormData }) => {
         }
       }
     }
-
+    
     // Verificar otros documentos requeridos
     const otherRequiredDocs = [
       ...requirements.sinisterDocs,
       ...requirements.receipts
     ];
+    
     for (let doc of otherRequiredDocs) {
       if (!uploadedFiles[doc.id] || uploadedFiles[doc.id].length === 0) {
         return false;
       }
     }
-
+    
     return true;
   };
 
@@ -453,7 +505,9 @@ const DocumentsSection = ({ formData, updateFormData }) => {
             Documentos de Firma Digital
           </h3>
           <p className="text-gray-700">
-            Has seleccionado recibir los documentos de la aseguradora por email para firma digital. Estos documentos se enviarán directamente a las personas correspondientes y no necesitas subirlos aquí.
+            Has seleccionado recibir los documentos de la aseguradora por email para firma digital.
+            Estos documentos se enviarán directamente a las personas correspondientes y no necesitas
+            subirlos aquí.
           </p>
         </motion.div>
       )}

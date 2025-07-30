@@ -19,6 +19,7 @@ import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 import supabase from '../lib/supabase';
 import { getFormDataFromMagicLink, updateMagicLinkFormData } from '../lib/magicLink';
+import WebhookService from '../lib/webhookService';
 
 const { FiAlertCircle } = FiIcons;
 
@@ -31,6 +32,7 @@ const ClaimsForm = () => {
   const [sessionId, setSessionId] = useState(null);
   const [loadingSession, setLoadingSession] = useState(false);
   const [sessionError, setSessionError] = useState(null);
+
   const [formData, setFormData] = useState({
     contactInfo: {},
     insuranceCompany: '',
@@ -135,68 +137,28 @@ const ClaimsForm = () => {
 
   const getSteps = () => {
     const baseSteps = [
-      {
-        id: 'insurance',
-        title: 'Aseguradora',
-        component: InsuranceCompany
-      },
-      {
-        id: 'claimType',
-        title: 'Tipo de Reclamo',
-        component: ClaimType
-      }
+      { id: 'insurance', title: 'Aseguradora', component: InsuranceCompany },
+      { id: 'claimType', title: 'Tipo de Reclamo', component: ClaimType }
     ];
 
     if (formData.claimType === 'reembolso') {
       baseSteps.push(
-        {
-          id: 'reimbursement',
-          title: 'Detalles del Reembolso',
-          component: ReimbursementDetails
-        },
-        {
-          id: 'services',
-          title: 'Tipos de Servicio',
-          component: ServiceTypes
-        }
+        { id: 'reimbursement', title: 'Detalles del Reembolso', component: ReimbursementDetails },
+        { id: 'services', title: 'Tipos de Servicio', component: ServiceTypes }
       );
     } else if (formData.claimType === 'programacion') {
       baseSteps.push(
-        {
-          id: 'programming',
-          title: 'Detalles de Programación',
-          component: ProgrammingDetails
-        }
+        { id: 'programming', title: 'Detalles de Programación', component: ProgrammingDetails }
       );
     }
 
     if (formData.claimType) {
       baseSteps.push(
-        {
-          id: 'checklist',
-          title: 'Documentos Requeridos',
-          component: DocumentChecklist
-        },
-        {
-          id: 'persons',
-          title: 'Personas Involucradas',
-          component: PersonsInvolved
-        },
-        {
-          id: 'description',
-          title: 'Descripción del Siniestro',
-          component: SinisterDescription
-        },
-        {
-          id: 'documents',
-          title: 'Subir Documentos',
-          component: DocumentsSection
-        },
-        {
-          id: 'terms',
-          title: 'Términos y Condiciones',
-          component: TermsAndConditions
-        }
+        { id: 'checklist', title: 'Documentos Requeridos', component: DocumentChecklist },
+        { id: 'persons', title: 'Personas Involucradas', component: PersonsInvolved },
+        { id: 'description', title: 'Descripción del Siniestro', component: SinisterDescription },
+        { id: 'documents', title: 'Subir Documentos', component: DocumentsSection },
+        { id: 'terms', title: 'Términos y Condiciones', component: TermsAndConditions }
       );
     }
 
@@ -236,27 +198,35 @@ const ClaimsForm = () => {
         const docsToCheck = formData.signatureDocumentOption === 'email'
           ? requiredDocs.filter(doc => !doc.needsSignature)
           : requiredDocs;
-        
-        return docsToCheck.every(doc => formData.documentChecklist && formData.documentChecklist[doc.id]) && 
-               formData.signatureDocumentOption !== undefined && formData.signatureDocumentOption !== '';
+        return docsToCheck.every(doc => formData.documentChecklist && formData.documentChecklist[doc.id]) &&
+          formData.signatureDocumentOption !== undefined &&
+          formData.signatureDocumentOption !== '';
       case 'persons':
         // Verificar que la información de contacto esté completa
         const contactInfo = formData.contactInfo;
-        const contactValid = contactInfo && contactInfo.nombres && contactInfo.apellidoPaterno && contactInfo.apellidoMaterno && contactInfo.email && validateEmail(contactInfo.email) && contactInfo.telefono && validateWhatsApp(contactInfo.telefono);
+        const contactValid = contactInfo && contactInfo.nombres && contactInfo.apellidoPaterno && contactInfo.apellidoMaterno &&
+          contactInfo.email && validateEmail(contactInfo.email) &&
+          contactInfo.telefono && validateWhatsApp(contactInfo.telefono);
 
         // Verificar que al menos el titular del seguro tenga la información completa
         const titular = formData.personsInvolved.titularAsegurado || {};
-        const titularValid = titular.nombres && titular.apellidoPaterno && titular.apellidoMaterno && titular.email && validateEmail(titular.email) && titular.telefono && validateWhatsApp(titular.telefono);
+        const titularValid = titular.nombres && titular.apellidoPaterno && titular.apellidoMaterno &&
+          titular.email && validateEmail(titular.email) &&
+          titular.telefono && validateWhatsApp(titular.telefono);
 
         // Verificar el asegurado afectado
         const afectado = formData.personsInvolved.aseguradoAfectado || {};
-        const afectadoValid = afectado.nombres && afectado.apellidoPaterno && afectado.apellidoMaterno && afectado.email && validateEmail(afectado.email) && afectado.telefono && validateWhatsApp(afectado.telefono);
+        const afectadoValid = afectado.nombres && afectado.apellidoPaterno && afectado.apellidoMaterno &&
+          afectado.email && validateEmail(afectado.email) &&
+          afectado.telefono && validateWhatsApp(afectado.telefono);
 
         // Si es reembolso, verificar también el titular de la cuenta
         let cuentaValid = true;
         if (formData.claimType === 'reembolso') {
           const cuenta = formData.personsInvolved.titularCuenta || {};
-          cuentaValid = cuenta.nombres && cuenta.apellidoPaterno && cuenta.apellidoMaterno && cuenta.email && validateEmail(cuenta.email) && cuenta.telefono && validateWhatsApp(cuenta.telefono);
+          cuentaValid = cuenta.nombres && cuenta.apellidoPaterno && cuenta.apellidoMaterno &&
+            cuenta.email && validateEmail(cuenta.email) &&
+            cuenta.telefono && validateWhatsApp(cuenta.telefono);
         }
 
         return contactValid && titularValid && afectadoValid && cuentaValid;
@@ -543,13 +513,51 @@ const ClaimsForm = () => {
 
       console.log('Reclamo enviado exitosamente:', data);
 
+      // Subir documentos al storage de Supabase
+      const uploadPromises = [];
+      const submissionId = data[0].id;
+
+      // Primero subimos los documentos al bucket de Storage
+      if (formData.documents && Object.keys(formData.documents).length > 0) {
+        for (const docType in formData.documents) {
+          if (Array.isArray(formData.documents[docType])) {
+            for (const doc of formData.documents[docType]) {
+              if (doc.file && doc.isLocal) {
+                const filePath = `${submissionId}/${docType}/${doc.name}`;
+                const { error: uploadError } = await supabase.storage
+                  .from('claims')
+                  .upload(filePath, doc.file, {
+                    cacheControl: '3600',
+                    upsert: false
+                  });
+                
+                if (uploadError) {
+                  console.error(`Error uploading file ${doc.name}:`, uploadError);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Disparar webhooks después de guardar exitosamente
+      try {
+        const webhookData = await WebhookService.transformFormDataForWebhook(formData, data[0].id);
+        await WebhookService.triggerWebhooks('form_submitted', webhookData);
+        console.log('Webhooks disparados exitosamente');
+      } catch (webhookError) {
+        console.error('Error al disparar webhooks:', webhookError);
+        // No fallar el envío del formulario si los webhooks fallan
+      }
+
       // Navegar a la página de agradecimiento con los datos del reclamo
-      navigate('/thank-you', { 
-        state: { 
-          formData: formData, 
-          submissionId: data[0].id 
+      navigate('/thank-you', {
+        state: {
+          formData: formData,
+          submissionId: data[0].id
         }
       });
+
     } catch (error) {
       console.error('Error al enviar el reclamo:', error);
       // Mensaje de error más detallado para ayudar en la depuración
@@ -580,7 +588,11 @@ const ClaimsForm = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Header */}
-      <FormHeader currentStep={currentStep} totalSteps={steps.length} formData={formData} />
+      <FormHeader
+        currentStep={currentStep}
+        totalSteps={steps.length}
+        formData={formData}
+      />
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Session error message */}
@@ -602,7 +614,11 @@ const ClaimsForm = () => {
         <Breadcrumb formData={formData} />
 
         {/* Progress Bar */}
-        <FormProgress currentStep={currentStep} totalSteps={steps.length} steps={steps} />
+        <FormProgress
+          currentStep={currentStep}
+          totalSteps={steps.length}
+          steps={steps}
+        />
 
         {/* Form Content */}
         <motion.div
@@ -633,7 +649,10 @@ const ClaimsForm = () => {
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ duration: 0.3 }}
               >
-                <CurrentStepComponent formData={formData} updateFormData={updateFormData} />
+                <CurrentStepComponent
+                  formData={formData}
+                  updateFormData={updateFormData}
+                />
               </motion.div>
             )}
           </AnimatePresence>

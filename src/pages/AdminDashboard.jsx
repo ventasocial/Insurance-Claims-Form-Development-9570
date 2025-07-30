@@ -4,26 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 import supabase from '../lib/supabase';
+import WebhookManager from '../components/WebhookManager';
 
-const {
-  FiArrowLeft,
-  FiUsers,
-  FiFileText,
-  FiCheckCircle,
-  FiClock,
-  FiExternalLink,
-  FiDownload,
-  FiLogOut,
-  FiSettings,
-  FiMessageCircle,
-  FiSearch,
-  FiFilter,
-  FiArchive,
-  FiTrash2,
-  FiCalendar,
-  FiCheck,
-  FiX
-} = FiIcons;
+const { FiArrowLeft, FiUsers, FiFileText, FiCheckCircle, FiClock, FiExternalLink, FiDownload, FiLogOut, FiSettings, FiMessageCircle, FiSearch, FiFilter, FiArchive, FiTrash2, FiCalendar, FiCheck, FiX, FiZap } = FiIcons;
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -213,7 +196,6 @@ const AdminDashboard = () => {
       // Refresh data
       await fetchData();
       setSelectedItems([]);
-      
       const action = showArchived ? 'restaurados' : 'archivados';
       alert(`${selectedItems.length} registro(s) ${action} correctamente`);
     } catch (err) {
@@ -240,12 +222,9 @@ const AdminDashboard = () => {
 
   const getStatusColor = (estado) => {
     switch (estado) {
-      case 'Enviado':
-        return 'bg-green-100 text-green-800';
-      case 'Pendiente':
-        return 'bg-yellow-100 text-yellow-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+      case 'Enviado': return 'bg-green-100 text-green-800';
+      case 'Pendiente': return 'bg-yellow-100 text-yellow-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -330,6 +309,19 @@ const AdminDashboard = () => {
                 <div className="flex items-center gap-2">
                   <SafeIcon icon={FiFileText} className="text-lg" />
                   Envíos
+                </div>
+              </button>
+              <button
+                onClick={() => setActiveTab('webhooks')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+                  activeTab === 'webhooks'
+                    ? 'border-[#204499] text-[#204499]'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <SafeIcon icon={FiZap} className="text-lg" />
+                  Webhooks
                 </div>
               </button>
               <button
@@ -557,7 +549,6 @@ const AdminDashboard = () => {
                       {showArchived ? `Restaurar (${selectedItems.length})` : `Archivar (${selectedItems.length})`}
                     </motion.button>
                   )}
-
                   <button
                     onClick={clearFilters}
                     className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors"
@@ -702,6 +693,9 @@ const AdminDashboard = () => {
           </>
         )}
 
+        {/* Webhooks Tab */}
+        {activeTab === 'webhooks' && <WebhookManager />}
+
         {/* WhatsApp Configuration Tab */}
         {activeTab === 'whatsapp' && (
           <motion.div
@@ -725,9 +719,7 @@ const AdminDashboard = () => {
                   <input
                     type="checkbox"
                     checked={whatsappConfig.enabled}
-                    onChange={(e) =>
-                      setWhatsappConfig(prev => ({ ...prev, enabled: e.target.checked }))
-                    }
+                    onChange={(e) => setWhatsappConfig(prev => ({ ...prev, enabled: e.target.checked }))}
                     className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
                   />
                   <span className="font-medium text-gray-900">Habilitar widget de WhatsApp</span>
@@ -741,9 +733,7 @@ const AdminDashboard = () => {
                 <input
                   type="text"
                   value={whatsappConfig.number}
-                  onChange={(e) =>
-                    setWhatsappConfig(prev => ({ ...prev, number: e.target.value }))
-                  }
+                  onChange={(e) => setWhatsappConfig(prev => ({ ...prev, number: e.target.value }))}
                   placeholder="+52 81 2209 5020"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 />
@@ -758,9 +748,7 @@ const AdminDashboard = () => {
                 </label>
                 <textarea
                   value={whatsappConfig.message}
-                  onChange={(e) =>
-                    setWhatsappConfig(prev => ({ ...prev, message: e.target.value }))
-                  }
+                  onChange={(e) => setWhatsappConfig(prev => ({ ...prev, message: e.target.value }))}
                   rows={4}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
                   placeholder="Mensaje que se enviará automáticamente cuando el usuario haga clic en el widget"
