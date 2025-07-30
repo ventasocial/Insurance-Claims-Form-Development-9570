@@ -463,7 +463,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
         />
       )}
 
-      {/* File Preview Modal */}
+      {/* File Preview Modal - Mejorado para PDFs */}
       {previewFile && (
         <motion.div
           initial={{ opacity: 0 }}
@@ -472,14 +472,14 @@ const DocumentsSection = ({ formData, updateFormData }) => {
           onClick={() => setPreviewFile(null)}
         >
           <div
-            className="bg-white rounded-lg max-w-4xl max-h-full overflow-auto"
+            className="bg-white rounded-lg max-w-6xl max-h-full overflow-auto"
             onClick={e => e.stopPropagation()}
           >
             <div className="p-4 border-b flex justify-between items-center">
               <h3 className="font-medium">{previewFile.name}</h3>
               <button
                 onClick={() => setPreviewFile(null)}
-                className="text-gray-500 hover:text-gray-700"
+                className="text-gray-500 hover:text-gray-700 text-2xl"
               >
                 ×
               </button>
@@ -491,10 +491,41 @@ const DocumentsSection = ({ formData, updateFormData }) => {
                   alt={previewFile.name}
                   className="max-w-full h-auto"
                 />
+              ) : previewFile.type === 'application/pdf' ? (
+                <div className="w-full h-96 md:h-[600px]">
+                  <iframe
+                    src={previewFile.url}
+                    className="w-full h-full border-0"
+                    title={`Vista previa de ${previewFile.name}`}
+                  >
+                    <p>
+                      Tu navegador no soporta la vista previa de PDFs.{' '}
+                      <a 
+                        href={previewFile.url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline"
+                      >
+                        Haz clic aquí para abrir el archivo
+                      </a>
+                    </p>
+                  </iframe>
+                </div>
               ) : (
-                <p className="text-center py-8 text-gray-500">
-                  Vista previa no disponible para este tipo de archivo
-                </p>
+                <div className="text-center py-8">
+                  <SafeIcon icon={FiFile} className="text-6xl text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600 mb-4">
+                    Vista previa no disponible para este tipo de archivo
+                  </p>
+                  <a 
+                    href={previewFile.url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:underline font-medium"
+                  >
+                    Abrir archivo en nueva pestaña
+                  </a>
+                </div>
               )}
             </div>
           </div>

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
-
 import ContactInfo from '../components/form-steps/ContactInfo';
 import InsuranceCompany from '../components/form-steps/InsuranceCompany';
 import ClaimType from '../components/form-steps/ClaimType';
@@ -13,12 +12,10 @@ import PersonsInvolved from '../components/form-steps/PersonsInvolved';
 import SignatureDocuments from '../components/form-steps/SignatureDocuments';
 import DocumentsSection from '../components/form-steps/DocumentsSection';
 import TermsAndConditions from '../components/form-steps/TermsAndConditions';
-
 import FormProgress from '../components/FormProgress';
 import FormNavigation from '../components/FormNavigation';
 import Breadcrumb from '../components/Breadcrumb';
 import FormHeader from '../components/FormHeader';
-
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 import supabase from '../lib/supabase';
@@ -52,7 +49,6 @@ const ClaimsForm = () => {
       titularCuenta: {}
     },
     signatureDocumentOption: '',
-    emailForDigitalSignature: '',
     documents: {},
     documentsSentByEmail: null,
     acceptedTerms: false,
@@ -63,16 +59,15 @@ const ClaimsForm = () => {
   useEffect(() => {
     const urlParams = new URLSearchParams(location.search);
     const session = urlParams.get('session');
-    
+
     if (session) {
       setSessionId(session);
       setLoadingSession(true);
       setSessionError(null);
-      
+
       getFormDataFromMagicLink(session)
         .then(savedFormData => {
           setFormData(savedFormData);
-          
           // Determine which step to go to based on the saved data
           const stepToNavigate = determineStepFromFormData(savedFormData);
           setCurrentStep(stepToNavigate);
@@ -85,7 +80,7 @@ const ClaimsForm = () => {
           setLoadingSession(false);
         });
     }
-    
+
     // Parse URL parameters for specific document fields
     const missingDocs = urlParams.get('missing');
     if (missingDocs && !session) {
@@ -93,12 +88,13 @@ const ClaimsForm = () => {
       setCurrentStep(9); // Documents section step (adjusted for new signature step)
     }
   }, [location]);
-  
+
   // Function to determine which step to navigate to based on form data
   const determineStepFromFormData = (data) => {
     // Logic to determine the appropriate step based on form completion
     if (!data.insuranceCompany) return 0;
     if (!data.claimType) return 1;
+
     if (data.claimType === 'reembolso') {
       if (!data.reimbursementType) return 2;
       if (!data.serviceTypes || data.serviceTypes.length === 0) return 3;
@@ -112,7 +108,7 @@ const ClaimsForm = () => {
       const titular = data.personsInvolved?.titularAsegurado || {};
       if (!titular.nombres) return 3;
     }
-    
+
     // Default to the first step if we can't determine
     return 0;
   };
@@ -137,71 +133,29 @@ const ClaimsForm = () => {
 
   const getSteps = () => {
     const baseSteps = [
-      {
-        id: 'contact',
-        title: 'Información de Contacto',
-        component: ContactInfo
-      },
-      {
-        id: 'insurance',
-        title: 'Aseguradora',
-        component: InsuranceCompany
-      },
-      {
-        id: 'claimType',
-        title: 'Tipo de Reclamo',
-        component: ClaimType
-      }
+      { id: 'contact', title: 'Información de Contacto', component: ContactInfo },
+      { id: 'insurance', title: 'Aseguradora', component: InsuranceCompany },
+      { id: 'claimType', title: 'Tipo de Reclamo', component: ClaimType }
     ];
 
     if (formData.claimType === 'reembolso') {
       baseSteps.push(
-        {
-          id: 'reimbursement',
-          title: 'Detalles del Reembolso',
-          component: ReimbursementDetails
-        },
-        {
-          id: 'services',
-          title: 'Tipos de Servicio',
-          component: ServiceTypes
-        },
-        {
-          id: 'description',
-          title: 'Descripción del Siniestro',
-          component: SinisterDescription
-        }
+        { id: 'reimbursement', title: 'Detalles del Reembolso', component: ReimbursementDetails },
+        { id: 'services', title: 'Tipos de Servicio', component: ServiceTypes },
+        { id: 'description', title: 'Descripción del Siniestro', component: SinisterDescription }
       );
     } else if (formData.claimType === 'programacion') {
-      baseSteps.push({
-        id: 'programming',
-        title: 'Detalles de Programación',
-        component: ProgrammingDetails
-      });
+      baseSteps.push(
+        { id: 'programming', title: 'Detalles de Programación', component: ProgrammingDetails }
+      );
     }
 
     if (formData.claimType) {
       baseSteps.push(
-        {
-          id: 'persons',
-          title: 'Personas Involucradas',
-          component: PersonsInvolved
-        },
-        {
-          id: 'signature',
-          title: 'Documentos de Firma',
-          component: SignatureDocuments
-        },
-        {
-          id: 'documents',
-          title: 'Documentos',
-          component: DocumentsSection
-        },
-        {
-          id: 'terms',
-          title: 'Términos y Condiciones',
-          component: TermsAndConditions
-        }
+        { id: 'persons', title: 'Personas Involucradas', component: PersonsInvolved },
+        { id: 'signature', title: 'Documentos de Firma', component: SignatureDocuments },
+        { id: 'documents', title: 'Documentos', component: DocumentsSection },
+        { id: 'terms', title: 'Términos y Condiciones', component: TermsAndConditions }
       );
     }
 
@@ -230,34 +184,25 @@ const ClaimsForm = () => {
           contactInfo.nombres &&
           contactInfo.apellidoPaterno &&
           contactInfo.apellidoMaterno &&
-          contactInfo.email &&
-          validateEmail(contactInfo.email) &&
-          contactInfo.telefono &&
-          validateWhatsApp(contactInfo.telefono)
+          contactInfo.email && validateEmail(contactInfo.email) &&
+          contactInfo.telefono && validateWhatsApp(contactInfo.telefono)
         );
-
       case 'insurance':
         return formData.insuranceCompany;
-
       case 'claimType':
         return formData.claimType;
-
       case 'reimbursement':
         return formData.reimbursementType && 
                (formData.reimbursementType === 'inicial' || formData.claimNumber);
-
       case 'services':
         return formData.serviceTypes.length > 0;
-
       case 'description':
         return formData.sinisterDescription.trim().length > 10;
-
       case 'programming':
         return formData.programmingService && 
                (formData.programmingService !== 'cirugia' || 
                 formData.insuranceCompany !== 'gnp' || 
                 formData.isCirugiaOrtopedica !== undefined);
-
       case 'persons':
         // Verificar que al menos el titular del seguro tenga la información completa
         const titular = formData.personsInvolved.titularAsegurado || {};
@@ -265,24 +210,17 @@ const ClaimsForm = () => {
         return requiredFields.every(field => titular[field] && titular[field].trim() !== '') &&
                validateEmail(titular.email || '') &&
                validateWhatsApp(titular.telefono || '');
-
       case 'signature':
         // Check if signature document option is selected
         const hasSignatureDocs = getSignatureDocuments().length > 0;
         if (!hasSignatureDocs) return true; // Skip if no signature documents needed
-        
-        return formData.signatureDocumentOption && 
-               (formData.signatureDocumentOption !== 'email' || 
-                (formData.emailForDigitalSignature && validateEmail(formData.emailForDigitalSignature)));
-
+        return formData.signatureDocumentOption; // Solo necesita tener seleccionada una opción
       case 'documents':
         // Verificar que el informe médico esté presente
         const documents = formData.documents || {};
         return documents['informe-medico'] && documents['informe-medico'].length > 0;
-
       case 'terms':
         return formData.acceptedTerms && formData.acceptedPrivacy;
-
       default:
         return true;
     }
@@ -352,7 +290,6 @@ const ClaimsForm = () => {
         asegurado_afectado: formData.personsInvolved.aseguradoAfectado || null,
         titular_cuenta: formData.personsInvolved.titularCuenta || null,
         opcion_documentos_firma: formData.signatureDocumentOption || null,
-        email_firma_digital: formData.emailForDigitalSignature || null,
         documentos: formData.documents || {},
         documentos_por_email: formData.documentsSentByEmail || null,
         estado: 'Enviado',
@@ -383,15 +320,14 @@ const ClaimsForm = () => {
           submissionId: data[0].id
         }
       });
+
     } catch (error) {
       console.error('Error al enviar el reclamo:', error);
-      
       // Mensaje de error más detallado para ayudar en la depuración
       let errorMessage = 'Hubo un error al enviar el formulario. Por favor intenta de nuevo.';
       if (error.message) {
         errorMessage += ' Detalle: ' + error.message;
       }
-      
       setSubmitError(errorMessage);
     } finally {
       setSubmitting(false);
@@ -415,11 +351,7 @@ const ClaimsForm = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Header */}
-      <FormHeader 
-        currentStep={currentStep} 
-        totalSteps={steps.length} 
-        formData={formData} 
-      />
+      <FormHeader currentStep={currentStep} totalSteps={steps.length} formData={formData} />
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Session error message */}
@@ -441,11 +373,7 @@ const ClaimsForm = () => {
         <Breadcrumb formData={formData} />
 
         {/* Progress Bar */}
-        <FormProgress
-          currentStep={currentStep}
-          totalSteps={steps.length}
-          steps={steps}
-        />
+        <FormProgress currentStep={currentStep} totalSteps={steps.length} steps={steps} />
 
         {/* Form Content */}
         <motion.div
@@ -476,10 +404,7 @@ const ClaimsForm = () => {
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ duration: 0.3 }}
               >
-                <CurrentStepComponent
-                  formData={formData}
-                  updateFormData={updateFormData}
-                />
+                <CurrentStepComponent formData={formData} updateFormData={updateFormData} />
               </motion.div>
             )}
           </AnimatePresence>

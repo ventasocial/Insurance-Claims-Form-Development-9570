@@ -7,20 +7,12 @@ const { FiDownload, FiMail, FiFileText, FiCheck, FiUser } = FiIcons;
 
 const SignatureDocuments = ({ formData, updateFormData }) => {
   const [selectedOption, setSelectedOption] = useState(formData.signatureDocumentOption || '');
-  const [emailForDigitalSignature, setEmailForDigitalSignature] = useState(formData.emailForDigitalSignature || '');
 
   const handleOptionChange = (option) => {
     setSelectedOption(option);
     updateFormData('signatureDocumentOption', option);
-    if (option !== 'email') {
-      setEmailForDigitalSignature('');
-      updateFormData('emailForDigitalSignature', '');
-    }
-  };
-
-  const handleEmailChange = (email) => {
-    setEmailForDigitalSignature(email);
-    updateFormData('emailForDigitalSignature', email);
+    // Limpiar el email de confirmación ya que ya no lo necesitamos
+    updateFormData('emailForDigitalSignature', '');
   };
 
   const getSignatureDocuments = () => {
@@ -116,13 +108,8 @@ const SignatureDocuments = ({ formData, updateFormData }) => {
   };
 
   const handleSendByEmail = () => {
-    if (!emailForDigitalSignature) {
-      alert('Por favor ingresa un email válido');
-      return;
-    }
-
     // Simulate sending documents by email
-    alert(`Los documentos se enviarán a: ${emailForDigitalSignature}\n\nRecibirás los formularios por correo electrónico para firma digital.`);
+    alert('Los documentos se enviarán a las personas correspondientes según se muestra en la lista.\n\nRecibirán los formularios por correo electrónico para firma digital.');
   };
 
   const getSignerEmails = () => {
@@ -133,15 +120,14 @@ const SignatureDocuments = ({ formData, updateFormData }) => {
       const signerInfo = {
         document: doc.name,
         signedBy: doc.signedBy,
-        emails: []
+        signers: []
       };
 
-      // Determinar qué emails corresponden según quien debe firmar
+      // Determinar qué personas corresponden según quien debe firmar
       if (doc.signedBy.includes('Asegurado Titular')) {
         const titular = personsInvolved.titularAsegurado;
-        if (titular?.email) {
-          signerInfo.emails.push({
-            person: 'Asegurado Titular',
+        if (titular?.nombres && titular?.email) {
+          signerInfo.signers.push({
             name: `${titular.nombres || ''} ${titular.apellidoPaterno || ''} ${titular.apellidoMaterno || ''}`.trim(),
             email: titular.email
           });
@@ -150,9 +136,8 @@ const SignatureDocuments = ({ formData, updateFormData }) => {
 
       if (doc.signedBy.includes('Asegurado Afectado')) {
         const afectado = personsInvolved.aseguradoAfectado;
-        if (afectado?.email) {
-          signerInfo.emails.push({
-            person: 'Asegurado Afectado',
+        if (afectado?.nombres && afectado?.email) {
+          signerInfo.signers.push({
             name: `${afectado.nombres || ''} ${afectado.apellidoPaterno || ''} ${afectado.apellidoMaterno || ''}`.trim(),
             email: afectado.email
           });
@@ -161,9 +146,8 @@ const SignatureDocuments = ({ formData, updateFormData }) => {
 
       if (doc.signedBy.includes('Titular de la Cuenta Bancaria')) {
         const titularCuenta = personsInvolved.titularCuenta;
-        if (titularCuenta?.email) {
-          signerInfo.emails.push({
-            person: 'Titular de la Cuenta Bancaria',
+        if (titularCuenta?.nombres && titularCuenta?.email) {
+          signerInfo.signers.push({
             name: `${titularCuenta.nombres || ''} ${titularCuenta.apellidoPaterno || ''} ${titularCuenta.apellidoMaterno || ''}`.trim(),
             email: titularCuenta.email
           });
@@ -317,18 +301,19 @@ const SignatureDocuments = ({ formData, updateFormData }) => {
                     <h5 className="font-medium text-gray-900 mb-3">
                       Documentos se enviarán a las siguientes personas:
                     </h5>
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                       {signerEmails.map((signer, index) => (
                         <div key={index} className="border-l-4 border-blue-500 pl-4">
-                          <p className="font-medium text-gray-900 text-sm">{signer.document}</p>
-                          <p className="text-xs text-gray-600 mb-2">Firmado por: {signer.signedBy}</p>
-                          <div className="space-y-1">
-                            {signer.emails.map((emailInfo, emailIndex) => (
-                              <div key={emailIndex} className="flex items-center gap-2 text-sm">
-                                <SafeIcon icon={FiUser} className="text-gray-400" />
-                                <span className="font-medium text-gray-700">{emailInfo.person}:</span>
-                                <span className="text-gray-600">{emailInfo.name}</span>
-                                <span className="text-blue-600">({emailInfo.email})</span>
+                          <p className="font-medium text-gray-900 text-sm mb-2">{signer.document}</p>
+                          <div className="space-y-2">
+                            {signer.signers.map((signerInfo, signerIndex) => (
+                              <div key={signerIndex} className="bg-gray-50 p-3 rounded-lg">
+                                <p className="text-sm">
+                                  <span className="font-medium text-gray-700">Firmado por:</span>{' '}
+                                  <span className="text-gray-900">{signerInfo.name}</span>{' '}
+                                  <span className="text-gray-500">y enviado al email:</span>{' '}
+                                  <span className="text-blue-600 font-medium">{signerInfo.email}</span>
+                                </p>
                               </div>
                             ))}
                           </div>
@@ -337,31 +322,11 @@ const SignatureDocuments = ({ formData, updateFormData }) => {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Correo Electrónico para Confirmación *
-                    </label>
-                    <input
-                      type="email"
-                      value={emailForDigitalSignature}
-                      onChange={(e) => handleEmailChange(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#204499] focus:border-transparent transition-all duration-300"
-                      placeholder="correo@ejemplo.com"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Email donde recibirás la confirmación del envío de documentos
-                    </p>
-                  </div>
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={handleSendByEmail}
-                    disabled={!emailForDigitalSignature}
-                    className={`w-full py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                      emailForDigitalSignature
-                        ? 'bg-[#204499] hover:bg-blue-700 text-white'
-                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                    }`}
+                    className="w-full bg-[#204499] hover:bg-blue-700 text-white py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
                   >
                     <SafeIcon icon={FiMail} className="text-lg" />
                     Configurar Envío por Email
@@ -385,11 +350,6 @@ const SignatureDocuments = ({ formData, updateFormData }) => {
               Opción seleccionada: {selectedOption === 'download' ? 'Descarga para Firma Física' : 'Envío por Email para Firma Digital'}
             </p>
           </div>
-          {selectedOption === 'email' && emailForDigitalSignature && (
-            <p className="text-green-600 text-sm mt-1">
-              Confirmación se enviará a: {emailForDigitalSignature}
-            </p>
-          )}
         </motion.div>
       )}
     </motion.div>
