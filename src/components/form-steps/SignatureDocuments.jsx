@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import SafeIcon from '../../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
-const { FiDownload, FiMail, FiFileText, FiCheck } = FiIcons;
+const { FiDownload, FiMail, FiFileText, FiCheck, FiUser } = FiIcons;
 
 const SignatureDocuments = ({ formData, updateFormData }) => {
   const [selectedOption, setSelectedOption] = useState(formData.signatureDocumentOption || '');
@@ -43,17 +43,20 @@ const SignatureDocuments = ({ formData, updateFormData }) => {
           {
             id: 'aviso-accidente-enfermedad',
             name: 'Aviso de Accidente o Enfermedad GNP',
-            url: documentUrls['aviso-accidente-enfermedad']
+            url: documentUrls['aviso-accidente-enfermedad'],
+            signedBy: 'Asegurado Afectado o Tutor en caso de menores de edad'
           },
           {
             id: 'formato-reembolso',
             name: 'Formato de Reembolso GNP',
-            url: documentUrls['formato-reembolso']
+            url: documentUrls['formato-reembolso'],
+            signedBy: 'Asegurado Afectado o Tutor en caso de menores de edad'
           },
           {
             id: 'formato-unico-bancario',
             name: 'Formato Único de Información Bancaria GNP',
-            url: documentUrls['formato-unico-bancario']
+            url: documentUrls['formato-unico-bancario'],
+            signedBy: 'Titular de la Cuenta Bancaria'
           }
         );
       } else if (claimType === 'programacion') {
@@ -61,7 +64,8 @@ const SignatureDocuments = ({ formData, updateFormData }) => {
           {
             id: 'aviso-accidente-enfermedad-prog',
             name: 'Aviso de Accidente o Enfermedad GNP',
-            url: documentUrls['aviso-accidente-enfermedad']
+            url: documentUrls['aviso-accidente-enfermedad'],
+            signedBy: 'Asegurado Afectado o Tutor en caso de menores de edad'
           }
         );
         if (programmingService === 'cirugia' && isCirugiaOrtopedica === true) {
@@ -69,7 +73,8 @@ const SignatureDocuments = ({ formData, updateFormData }) => {
             {
               id: 'formato-cirugia-traumatologia',
               name: 'Formato de Cirugía de Traumatología, Ortopedia y Neurocirugía',
-              url: documentUrls['formato-cirugia-traumatologia']
+              url: documentUrls['formato-cirugia-traumatologia'],
+              signedBy: 'Asegurado Afectado o Tutor en caso de menores de edad'
             }
           );
         }
@@ -80,7 +85,8 @@ const SignatureDocuments = ({ formData, updateFormData }) => {
           {
             id: 'solicitud-programacion-axa',
             name: 'Solicitud de Programación AXA',
-            url: documentUrls['solicitud-programacion-axa']
+            url: documentUrls['solicitud-programacion-axa'],
+            signedBy: 'Asegurado Titular, Asegurado Afectado o tutor en caso de menores de edad'
           }
         );
       } else if (claimType === 'reembolso') {
@@ -88,7 +94,8 @@ const SignatureDocuments = ({ formData, updateFormData }) => {
           {
             id: 'solicitud-reembolso-axa',
             name: 'Solicitud de Reembolso AXA',
-            url: documentUrls['solicitud-reembolso-axa']
+            url: documentUrls['solicitud-reembolso-axa'],
+            signedBy: 'Asegurado Titular, Asegurado Afectado o tutor en caso de menores de edad y Titular de la cuenta bancaria'
           }
         );
       }
@@ -118,6 +125,59 @@ const SignatureDocuments = ({ formData, updateFormData }) => {
     alert(`Los documentos se enviarán a: ${emailForDigitalSignature}\n\nRecibirás los formularios por correo electrónico para firma digital.`);
   };
 
+  const getSignerEmails = () => {
+    const signerEmails = [];
+    const personsInvolved = formData.personsInvolved || {};
+
+    documents.forEach(doc => {
+      const signerInfo = {
+        document: doc.name,
+        signedBy: doc.signedBy,
+        emails: []
+      };
+
+      // Determinar qué emails corresponden según quien debe firmar
+      if (doc.signedBy.includes('Asegurado Titular')) {
+        const titular = personsInvolved.titularAsegurado;
+        if (titular?.email) {
+          signerInfo.emails.push({
+            person: 'Asegurado Titular',
+            name: `${titular.nombres || ''} ${titular.apellidoPaterno || ''} ${titular.apellidoMaterno || ''}`.trim(),
+            email: titular.email
+          });
+        }
+      }
+
+      if (doc.signedBy.includes('Asegurado Afectado')) {
+        const afectado = personsInvolved.aseguradoAfectado;
+        if (afectado?.email) {
+          signerInfo.emails.push({
+            person: 'Asegurado Afectado',
+            name: `${afectado.nombres || ''} ${afectado.apellidoPaterno || ''} ${afectado.apellidoMaterno || ''}`.trim(),
+            email: afectado.email
+          });
+        }
+      }
+
+      if (doc.signedBy.includes('Titular de la Cuenta Bancaria')) {
+        const titularCuenta = personsInvolved.titularCuenta;
+        if (titularCuenta?.email) {
+          signerInfo.emails.push({
+            person: 'Titular de la Cuenta Bancaria',
+            name: `${titularCuenta.nombres || ''} ${titularCuenta.apellidoPaterno || ''} ${titularCuenta.apellidoMaterno || ''}`.trim(),
+            email: titularCuenta.email
+          });
+        }
+      }
+
+      signerEmails.push(signerInfo);
+    });
+
+    return signerEmails;
+  };
+
+  const signerEmails = getSignerEmails();
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -126,7 +186,7 @@ const SignatureDocuments = ({ formData, updateFormData }) => {
     >
       <div className="text-center mb-8">
         <h2 className="text-3xl font-bold text-gray-900 mb-2">
-          Documentos de Firma
+          Firma de Documentos de la Aseguradora
         </h2>
         <p className="text-gray-600">
           Selecciona cómo deseas obtener los documentos que requieren tu firma
@@ -139,14 +199,24 @@ const SignatureDocuments = ({ formData, updateFormData }) => {
           <SafeIcon icon={FiFileText} className="text-lg" />
           Documentos que requieren firma:
         </h3>
-        <ul className="space-y-2">
+        <div className="space-y-3">
           {documents.map((doc, index) => (
-            <li key={doc.id} className="flex items-center gap-2 text-blue-800">
-              <SafeIcon icon={FiCheck} className="text-green-600 flex-shrink-0" />
-              <span>{doc.name}</span>
-            </li>
+            <div key={doc.id} className="bg-white p-4 rounded-lg border border-blue-200">
+              <div className="flex items-start gap-3">
+                <SafeIcon icon={FiCheck} className="text-green-600 flex-shrink-0 mt-1" />
+                <div className="flex-1">
+                  <p className="font-medium text-blue-800">{doc.name}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <SafeIcon icon={FiUser} className="text-gray-500 text-sm" />
+                    <p className="text-sm text-gray-600">
+                      <span className="font-medium">Firmado por:</span> {doc.signedBy}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
           ))}
-        </ul>
+        </div>
       </div>
 
       {/* Options */}
@@ -243,9 +313,33 @@ const SignatureDocuments = ({ formData, updateFormData }) => {
                   animate={{ opacity: 1, height: 'auto' }}
                   className="space-y-4"
                 >
+                  <div className="bg-white p-4 rounded-lg border border-gray-200">
+                    <h5 className="font-medium text-gray-900 mb-3">
+                      Documentos se enviarán a las siguientes personas:
+                    </h5>
+                    <div className="space-y-3">
+                      {signerEmails.map((signer, index) => (
+                        <div key={index} className="border-l-4 border-blue-500 pl-4">
+                          <p className="font-medium text-gray-900 text-sm">{signer.document}</p>
+                          <p className="text-xs text-gray-600 mb-2">Firmado por: {signer.signedBy}</p>
+                          <div className="space-y-1">
+                            {signer.emails.map((emailInfo, emailIndex) => (
+                              <div key={emailIndex} className="flex items-center gap-2 text-sm">
+                                <SafeIcon icon={FiUser} className="text-gray-400" />
+                                <span className="font-medium text-gray-700">{emailInfo.person}:</span>
+                                <span className="text-gray-600">{emailInfo.name}</span>
+                                <span className="text-blue-600">({emailInfo.email})</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Correo Electrónico para Firma Digital *
+                      Correo Electrónico para Confirmación *
                     </label>
                     <input
                       type="email"
@@ -255,7 +349,7 @@ const SignatureDocuments = ({ formData, updateFormData }) => {
                       placeholder="correo@ejemplo.com"
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                      Puede ser diferente al email de contacto si lo deseas
+                      Email donde recibirás la confirmación del envío de documentos
                     </p>
                   </div>
                   <motion.button
@@ -270,7 +364,7 @@ const SignatureDocuments = ({ formData, updateFormData }) => {
                     }`}
                   >
                     <SafeIcon icon={FiMail} className="text-lg" />
-                    Enviar Documentos por Email
+                    Configurar Envío por Email
                   </motion.button>
                 </motion.div>
               )}
@@ -293,7 +387,7 @@ const SignatureDocuments = ({ formData, updateFormData }) => {
           </div>
           {selectedOption === 'email' && emailForDigitalSignature && (
             <p className="text-green-600 text-sm mt-1">
-              Los documentos se enviarán a: {emailForDigitalSignature}
+              Confirmación se enviará a: {emailForDigitalSignature}
             </p>
           )}
         </motion.div>

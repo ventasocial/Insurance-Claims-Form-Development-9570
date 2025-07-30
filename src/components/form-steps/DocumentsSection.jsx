@@ -40,7 +40,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
 
     setUploadedFiles(newFiles);
     updateFormData('documents', newFiles);
-    
+
     // Show email form automatically
     setShowEmailForm(true);
   };
@@ -65,7 +65,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
     const newFiles = { ...uploadedFiles };
     if (newFiles[documentType]) {
       const fileToRemove = newFiles[documentType][fileIndex];
-
+      
       // Clean up object URL to prevent memory leaks
       if (fileToRemove.url && fileToRemove.isLocal) {
         URL.revokeObjectURL(fileToRemove.url);
@@ -96,54 +96,55 @@ const DocumentsSection = ({ formData, updateFormData }) => {
       description: 'Informe médico detallado (Requerido para todos los reclamos)'
     });
 
-    // Forms section requirements
-    if (formData.insuranceCompany === 'gnp') {
-      if (formData.claimType === 'reembolso') {
-        requirements.forms.push(
-          {
-            id: 'aviso-accidente-enfermedad',
-            title: 'Aviso de Accidente o Enfermedad',
-            description: 'Formulario oficial que debe ser firmado'
-          },
-          {
-            id: 'formato-reembolso',
-            title: 'Formato de Reembolso',
-            description: 'Formulario para solicitar el reembolso'
-          },
-          {
-            id: 'formato-unico-bancario',
-            title: 'Formato Único de Información Bancaria',
-            description: 'Información bancaria para el reembolso'
-          }
-        );
-      } else if (formData.claimType === 'programacion') {
-        requirements.forms.push({
-          id: 'aviso-accidente-enfermedad-prog',
-          title: 'Aviso de Accidente o Enfermedad',
-          description: 'Formulario oficial para programación'
-        });
-
-        if (formData.programmingService === 'cirugia' && formData.isCirugiaOrtopedica === true) {
+    // Forms section requirements - Solo mostrar si se eligió descarga física
+    if (formData.signatureDocumentOption === 'download') {
+      if (formData.insuranceCompany === 'gnp') {
+        if (formData.claimType === 'reembolso') {
+          requirements.forms.push(
+            {
+              id: 'aviso-accidente-enfermedad',
+              title: 'Aviso de Accidente o Enfermedad',
+              description: 'Formulario oficial que debe ser firmado'
+            },
+            {
+              id: 'formato-reembolso',
+              title: 'Formato de Reembolso',
+              description: 'Formulario para solicitar el reembolso'
+            },
+            {
+              id: 'formato-unico-bancario',
+              title: 'Formato Único de Información Bancaria',
+              description: 'Información bancaria para el reembolso'
+            }
+          );
+        } else if (formData.claimType === 'programacion') {
           requirements.forms.push({
-            id: 'formato-cirugia-traumatologia',
-            title: 'Formato de Cirugía de Traumatología, Ortopedia y Neurocirugía',
-            description: 'Formato específico para este tipo de cirugías'
+            id: 'aviso-accidente-enfermedad-prog',
+            title: 'Aviso de Accidente o Enfermedad',
+            description: 'Formulario oficial para programación'
+          });
+          if (formData.programmingService === 'cirugia' && formData.isCirugiaOrtopedica === true) {
+            requirements.forms.push({
+              id: 'formato-cirugia-traumatologia',
+              title: 'Formato de Cirugía de Traumatología, Ortopedia y Neurocirugía',
+              description: 'Formato específico para este tipo de cirugías'
+            });
+          }
+        }
+      } else if (formData.insuranceCompany === 'axa') {
+        if (formData.claimType === 'programacion') {
+          requirements.forms.push({
+            id: 'solicitud-programacion-axa',
+            title: 'Solicitud de Programación',
+            description: 'Formulario de AXA para programación'
+          });
+        } else if (formData.claimType === 'reembolso') {
+          requirements.forms.push({
+            id: 'solicitud-reembolso-axa',
+            title: 'Solicitud de Reembolso',
+            description: 'Formulario de AXA para reembolso'
           });
         }
-      }
-    } else if (formData.insuranceCompany === 'axa') {
-      if (formData.claimType === 'programacion') {
-        requirements.forms.push({
-          id: 'solicitud-programacion-axa',
-          title: 'Solicitud de Programación',
-          description: 'Formulario de AXA para programación'
-        });
-      } else if (formData.claimType === 'reembolso') {
-        requirements.forms.push({
-          id: 'solicitud-reembolso-axa',
-          title: 'Solicitud de Reembolso',
-          description: 'Formulario de AXA para reembolso'
-        });
       }
     }
 
@@ -283,7 +284,9 @@ const DocumentsSection = ({ formData, updateFormData }) => {
       />
       <label
         htmlFor={`upload-${document.id}`}
-        className={`cursor-pointer flex flex-col items-center space-y-3 ${uploading ? 'opacity-50' : ''}`}
+        className={`cursor-pointer flex flex-col items-center space-y-3 ${
+          uploading ? 'opacity-50' : ''
+        }`}
       >
         {uploading ? (
           <div className="animate-spin w-8 h-8 border-2 border-[#204499] border-t-transparent rounded-full"></div>
@@ -303,7 +306,6 @@ const DocumentsSection = ({ formData, updateFormData }) => {
 
   const FileList = ({ documentType }) => {
     const files = uploadedFiles[documentType] || [];
-    
     if (files.length === 0) {
       return (
         <div className="text-center py-8 text-gray-500">
@@ -408,55 +410,23 @@ const DocumentsSection = ({ formData, updateFormData }) => {
         </motion.div>
       )}
 
-      {/* Información sobre el almacenamiento local */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6"
-      >
-        <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-          <SafeIcon icon={FiAlertCircle} className="text-blue-600" />
-          Almacenamiento de Documentos
-        </h3>
-        <p className="text-gray-700 mb-4">
-          Los documentos se guardan de forma segura y serán procesados por nuestro equipo.
-        </p>
-        <ol className="list-decimal pl-5 space-y-2 text-gray-700 mb-4">
-          <li>Sube todos los documentos requeridos</li>
-          <li>Completa el resto del formulario</li>
-          <li>Al enviar, recibirás confirmación por email</li>
-          <li>Nuestro equipo procesará tu reclamo</li>
-        </ol>
-        
-        {showEmailForm && (
-          <div className="mt-4 bg-white p-4 rounded-lg border border-gray-200">
-            <div className="mb-3">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Correo electrónico para notificaciones:
-              </label>
-              <input
-                type="email"
-                value={emailToSend}
-                onChange={(e) => setEmailToSend(e.target.value)}
-                placeholder="tucorreo@ejemplo.com"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#204499] focus:border-transparent"
-              />
-            </div>
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={handleSendByEmail}
-              className="bg-[#204499] hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-            >
-              <SafeIcon icon={FiPaperclip} className="text-sm" />
-              Configurar Notificaciones
-            </motion.button>
-            <p className="text-xs text-gray-500 mt-2">
-              * Recibirás actualizaciones sobre el estado de tu reclamo
-            </p>
-          </div>
-        )}
-      </motion.div>
+      {/* Mostrar información sobre firma digital si está seleccionada */}
+      {formData.signatureDocumentOption === 'email' && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6"
+        >
+          <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+            <SafeIcon icon={FiAlertCircle} className="text-blue-600" />
+            Documentos de Firma Digital
+          </h3>
+          <p className="text-gray-700">
+            Has seleccionado recibir los documentos de la aseguradora por email para firma digital. 
+            Estos documentos se enviarán directamente a las personas correspondientes y no necesitas subirlos aquí.
+          </p>
+        </motion.div>
+      )}
 
       {/* Contador de archivos */}
       {getTotalFilesCount() > 0 && (
@@ -468,9 +438,10 @@ const DocumentsSection = ({ formData, updateFormData }) => {
         </div>
       )}
 
+      {/* Mostrar sección de documentos de aseguradora solo si se eligió descarga física */}
       {requirements.forms.length > 0 && (
         <DocumentSection
-          title="1. Formas de la Aseguradora"
+          title="1. Documentos de la Aseguradora"
           documents={requirements.forms}
           bgColor="bg-blue-50"
         />
@@ -478,7 +449,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
 
       {requirements.sinisterDocs.length > 0 && (
         <DocumentSection
-          title="2. Documentos del Siniestro"
+          title={formData.signatureDocumentOption === 'download' ? "2. Documentos del Siniestro" : "1. Documentos del Siniestro"}
           documents={requirements.sinisterDocs}
           bgColor="bg-green-50"
         />
@@ -486,7 +457,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
 
       {requirements.receipts.length > 0 && (
         <DocumentSection
-          title="3. Facturas, Recetas y Otros Documentos"
+          title={formData.signatureDocumentOption === 'download' ? "3. Facturas, Recetas y Otros Documentos" : "2. Facturas, Recetas y Otros Documentos"}
           documents={requirements.receipts}
           bgColor="bg-yellow-50"
         />
