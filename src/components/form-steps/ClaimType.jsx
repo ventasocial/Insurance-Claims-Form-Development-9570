@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import SafeIcon from '../../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
-const { FiDollarSign, FiCalendar, FiHeart } = FiIcons;
+const { FiDollarSign, FiCalendar } = FiIcons;
 
 const ClaimType = ({ formData, updateFormData }) => {
   const claimTypes = [
@@ -20,14 +20,8 @@ const ClaimType = ({ formData, updateFormData }) => {
       description: 'Programar servicios médicos futuros',
       icon: FiCalendar,
       color: 'green'
-    },
-    {
-      id: 'maternidad',
-      title: 'Maternidad',
-      description: 'Servicios relacionados con maternidad',
-      icon: FiHeart,
-      color: 'pink'
     }
+    // Eliminada la opción de Maternidad
   ];
 
   const handleSelect = (type) => {
@@ -36,15 +30,8 @@ const ClaimType = ({ formData, updateFormData }) => {
 
   const getColorClasses = (color, isSelected) => {
     const colors = {
-      blue: isSelected 
-        ? 'border-[#204499] bg-blue-50 text-[#204499]' 
-        : 'border-gray-200 hover:border-blue-300',
-      green: isSelected 
-        ? 'border-green-500 bg-green-50 text-green-600' 
-        : 'border-gray-200 hover:border-green-300',
-      pink: isSelected 
-        ? 'border-pink-500 bg-pink-50 text-pink-600' 
-        : 'border-gray-200 hover:border-pink-300'
+      blue: isSelected ? 'border-[#204499] bg-blue-50 text-[#204499]' : 'border-gray-200 hover:border-blue-300',
+      green: isSelected ? 'border-green-500 bg-green-50 text-green-600' : 'border-gray-200 hover:border-green-300'
     };
     return colors[color];
   };
@@ -64,7 +51,7 @@ const ClaimType = ({ formData, updateFormData }) => {
         </p>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-6">
+      <div className="grid md:grid-cols-2 gap-6">
         {claimTypes.map((type, index) => (
           <motion.button
             key={type.id}
@@ -80,16 +67,14 @@ const ClaimType = ({ formData, updateFormData }) => {
             )}`}
           >
             <div className="flex flex-col space-y-4">
-              <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                formData.claimType === type.id
-                  ? `bg-${type.color}-100`
-                  : 'bg-gray-100'
-              }`}>
-                <SafeIcon 
-                  icon={type.icon} 
+              <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${formData.claimType === type.id ? `bg-${type.color}-100` : 'bg-gray-100'}`}>
+                <SafeIcon
+                  icon={type.icon}
                   className={`text-2xl ${
                     formData.claimType === type.id
-                      ? type.color === 'blue' ? 'text-[#204499]' : `text-${type.color}-600`
+                      ? type.color === 'blue'
+                        ? 'text-[#204499]'
+                        : `text-${type.color}-600`
                       : 'text-gray-400'
                   }`}
                 />
@@ -98,9 +83,7 @@ const ClaimType = ({ formData, updateFormData }) => {
                 <h3 className="font-semibold text-xl mb-2">
                   {type.title}
                 </h3>
-                <p className={`text-sm ${
-                  formData.claimType === type.id ? 'text-gray-700' : 'text-gray-500'
-                }`}>
+                <p className={`text-sm ${formData.claimType === type.id ? 'text-gray-700' : 'text-gray-500'}`}>
                   {type.description}
                 </p>
               </div>

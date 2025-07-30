@@ -2,43 +2,101 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import SafeIcon from '../../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
+import supabase from '../../lib/supabase';
 
 const { FiUpload, FiFile, FiTrash2, FiEye } = FiIcons;
 
 const DocumentsSection = ({ formData, updateFormData }) => {
   const [uploadedFiles, setUploadedFiles] = useState({});
   const [previewFile, setPreviewFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState(null);
 
-  const handleFileUpload = (documentType, files) => {
-    const newFiles = { ...uploadedFiles };
-    if (!newFiles[documentType]) {
-      newFiles[documentType] = [];
+  const handleFileUpload = async (documentType, files) => {
+    if (!files || files.length === 0) return;
+    
+    setUploading(true);
+    setUploadError(null);
+    
+    try {
+      const newFiles = { ...uploadedFiles };
+      if (!newFiles[documentType]) {
+        newFiles[documentType] = [];
+      }
+      
+      for (let file of Array.from(files)) {
+        // Generar un nombre de archivo único para evitar colisiones
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${documentType}_${Date.now()}.${fileExt}`;
+        const filePath = `${formData.insuranceCompany}/${formData.claimType}/${fileName}`;
+        
+        // Subir el archivo a Supabase Storage
+        const { data, error } = await supabase.storage
+          .from('claim_documents')
+          .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: false
+          });
+        
+        if (error) {
+          console.error('Error al subir archivo:', error);
+          setUploadError(`Error al subir ${file.name}: ${error.message}`);
+        } else {
+          // Obtener la URL pública del archivo
+          const { data: { publicUrl } } = supabase.storage
+            .from('claim_documents')
+            .getPublicUrl(filePath);
+          
+          newFiles[documentType].push({
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            url: URL.createObjectURL(file), // Para vista previa local
+            storagePath: filePath, // Para referencia en la base de datos
+            publicUrl: publicUrl // URL para acceso público
+          });
+        }
+      }
+      
+      setUploadedFiles(newFiles);
+      updateFormData('documents', newFiles);
+    } catch (error) {
+      console.error('Error inesperado al subir archivos:', error);
+      setUploadError('Error inesperado al subir archivos. Por favor, inténtalo de nuevo.');
+    } finally {
+      setUploading(false);
     }
-
-    Array.from(files).forEach(file => {
-      newFiles[documentType].push({
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        url: URL.createObjectURL(file),
-        file: file
-      });
-    });
-
-    setUploadedFiles(newFiles);
-    updateFormData('documents', newFiles);
   };
 
-  const removeFile = (documentType, fileIndex) => {
+  const removeFile = async (documentType, fileIndex) => {
     const newFiles = { ...uploadedFiles };
     if (newFiles[documentType]) {
+      const fileToRemove = newFiles[documentType][fileIndex];
+      
+      // Si el archivo se subió a Supabase, eliminarlo del almacenamiento
+      if (fileToRemove.storagePath) {
+        try {
+          const { error } = await supabase.storage
+            .from('claim_documents')
+            .remove([fileToRemove.storagePath]);
+            
+          if (error) {
+            console.error('Error al eliminar archivo de Supabase:', error);
+          }
+        } catch (error) {
+          console.error('Error inesperado al eliminar archivo:', error);
+        }
+      }
+      
+      // Eliminar el archivo de la lista local
       newFiles[documentType].splice(fileIndex, 1);
       if (newFiles[documentType].length === 0) {
         delete newFiles[documentType];
       }
+      
+      setUploadedFiles(newFiles);
+      updateFormData('documents', newFiles);
     }
-    setUploadedFiles(newFiles);
-    updateFormData('documents', newFiles);
   };
 
   const getDocumentRequirements = () => {
@@ -193,12 +251,17 @@ const DocumentsSection = ({ formData, updateFormData }) => {
         onChange={(e) => handleFileUpload(document.id, e.target.files)}
         className="hidden"
         id={`upload-${document.id}`}
+        disabled={uploading}
       />
       <label
         htmlFor={`upload-${document.id}`}
-        className="cursor-pointer flex flex-col items-center space-y-3"
+        className={`cursor-pointer flex flex-col items-center space-y-3 ${uploading ? 'opacity-50' : ''}`}
       >
-        <SafeIcon icon={FiUpload} className="text-3xl text-gray-400" />
+        {uploading ? (
+          <div className="animate-spin w-8 h-8 border-2 border-[#204499] border-t-transparent rounded-full"></div>
+        ) : (
+          <SafeIcon icon={FiUpload} className="text-3xl text-gray-400" />
+        )}
         <div className="text-center">
           <p className="font-medium text-gray-700">{document.title}</p>
           <p className="text-sm text-gray-500 mt-1">{document.description}</p>
@@ -212,6 +275,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
 
   const FileList = ({ documentType }) => {
     const files = uploadedFiles[documentType] || [];
+    
     if (files.length === 0) {
       return (
         <div className="text-center py-8 text-gray-500">
@@ -293,28 +357,26 @@ const DocumentsSection = ({ formData, updateFormData }) => {
         </p>
       </div>
 
+      {uploadError && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-red-50 text-red-800 p-4 rounded-lg mb-6"
+        >
+          {uploadError}
+        </motion.div>
+      )}
+
       {requirements.forms.length > 0 && (
-        <DocumentSection
-          title="1. Formas de la Aseguradora"
-          documents={requirements.forms}
-          bgColor="bg-blue-50"
-        />
+        <DocumentSection title="1. Formas de la Aseguradora" documents={requirements.forms} bgColor="bg-blue-50" />
       )}
 
       {requirements.sinisterDocs.length > 0 && (
-        <DocumentSection
-          title="2. Documentos del Siniestro"
-          documents={requirements.sinisterDocs}
-          bgColor="bg-green-50"
-        />
+        <DocumentSection title="2. Documentos del Siniestro" documents={requirements.sinisterDocs} bgColor="bg-green-50" />
       )}
 
       {requirements.receipts.length > 0 && (
-        <DocumentSection
-          title="3. Facturas, Recetas y Otros Documentos"
-          documents={requirements.receipts}
-          bgColor="bg-yellow-50"
-        />
+        <DocumentSection title="3. Facturas, Recetas y Otros Documentos" documents={requirements.receipts} bgColor="bg-yellow-50" />
       )}
 
       {/* File Preview Modal */}
@@ -325,7 +387,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
           onClick={() => setPreviewFile(null)}
         >
-          <div className="bg-white rounded-lg max-w-4xl max-h-full overflow-auto">
+          <div className="bg-white rounded-lg max-w-4xl max-h-full overflow-auto" onClick={e => e.stopPropagation()}>
             <div className="p-4 border-b flex justify-between items-center">
               <h3 className="font-medium">{previewFile.name}</h3>
               <button
@@ -337,11 +399,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
             </div>
             <div className="p-4">
               {previewFile.type.startsWith('image/') ? (
-                <img
-                  src={previewFile.url}
-                  alt={previewFile.name}
-                  className="max-w-full h-auto"
-                />
+                <img src={previewFile.url} alt={previewFile.name} className="max-w-full h-auto" />
               ) : (
                 <p className="text-center py-8 text-gray-500">
                   Vista previa no disponible para este tipo de archivo

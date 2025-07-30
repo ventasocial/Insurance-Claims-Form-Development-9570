@@ -14,6 +14,7 @@ import DocumentsSection from '../components/form-steps/DocumentsSection';
 import TermsAndConditions from '../components/form-steps/TermsAndConditions';
 import FormProgress from '../components/FormProgress';
 import FormNavigation from '../components/FormNavigation';
+import Breadcrumb from '../components/Breadcrumb';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 import supabase from '../lib/supabase';
@@ -84,7 +85,7 @@ const ClaimsForm = () => {
       );
     }
 
-    if (formData.claimType && formData.claimType !== 'maternidad') {
+    if (formData.claimType) {
       baseSteps.push(
         { id: 'persons', title: 'Personas Involucradas', component: PersonsInvolved },
         { id: 'signature', title: 'Documentos de Firma', component: SignatureDocuments },
@@ -265,6 +266,9 @@ const ClaimsForm = () => {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Breadcrumb */}
+        <Breadcrumb formData={formData} />
+        
         {/* Progress Bar */}
         <FormProgress 
           currentStep={currentStep} 

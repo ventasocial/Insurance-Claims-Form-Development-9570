@@ -10,14 +10,10 @@ const InsuranceCompany = ({ formData, updateFormData }) => {
     },
     {
       id: 'axa',
-      name: 'AXA', 
+      name: 'AXA',
       logo: 'https://storage.googleapis.com/msgsndr/HWRXLf7lstECUAG07eRw/media/6889b7c3b67b66d426854871.png'
-    },
-    {
-      id: 'qualitas',
-      name: 'Qualitas',
-      logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a9/Qualitas_logo.svg/1200px-Qualitas_logo.svg.png'
     }
+    // Eliminada la opción de Qualitas
   ];
 
   const handleSelect = (companyId) => {
@@ -39,7 +35,7 @@ const InsuranceCompany = ({ formData, updateFormData }) => {
         </p>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-6">
+      <div className="grid md:grid-cols-2 gap-6">
         {companies.map((company, index) => (
           <motion.button
             key={company.id}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import SafeIcon from '../../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
@@ -7,12 +7,42 @@ const { FiUser, FiCopy, FiCheck, FiUserCheck } = FiIcons;
 
 const PersonsInvolved = ({ formData, updateFormData }) => {
   const [activeTab, setActiveTab] = useState('titularAsegurado');
+  
+  // Determinar qué pestañas mostrar basado en el tipo de reclamo
+  const getPersonTypes = () => {
+    const baseTypes = [
+      {
+        id: 'titularAsegurado',
+        title: 'Asegurado Titular',
+        description: 'Titular de la póliza'
+      },
+      {
+        id: 'aseguradoAfectado',
+        title: 'Asegurado Afectado',
+        description: 'Persona que requiere atención'
+      }
+    ];
+    
+    // Agregar titular de cuenta bancaria solo si es reembolso
+    if (formData.claimType === 'reembolso') {
+      baseTypes.push({
+        id: 'titularCuenta',
+        title: 'Titular Cuenta Bancaria',
+        description: 'Para reembolsos'
+      });
+    }
+    
+    return baseTypes;
+  };
 
-  const personTypes = [
-    { id: 'titularAsegurado', title: 'Asegurado Titular', description: 'Titular de la póliza' },
-    { id: 'aseguradoAfectado', title: 'Asegurado Afectado', description: 'Persona que requiere atención' },
-    { id: 'titularCuenta', title: 'Titular Cuenta Bancaria', description: 'Para reembolsos' }
-  ];
+  const personTypes = getPersonTypes();
+  
+  // Si el activeTab ya no está en personTypes, resetear a la primera pestaña
+  useEffect(() => {
+    if (!personTypes.some(type => type.id === activeTab)) {
+      setActiveTab(personTypes[0].id);
+    }
+  }, [personTypes, activeTab]);
 
   const handlePersonDataChange = (personType, field, value) => {
     updateFormData('personsInvolved', {
@@ -33,7 +63,6 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
         telefono: formData.contactInfo?.telefono || '',
         email: formData.contactInfo?.email || ''
       };
-      
       updateFormData('personsInvolved', {
         ...formData.personsInvolved,
         [personType]: contactData
@@ -54,7 +83,6 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
       telefono: formData.contactInfo?.telefono || '',
       email: formData.contactInfo?.email || ''
     };
-    
     updateFormData('personsInvolved', {
       ...formData.personsInvolved,
       [personType]: contactData
@@ -64,7 +92,6 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
   const isContactDataSame = (personType) => {
     const personData = formData.personsInvolved[personType] || {};
     const contactInfo = formData.contactInfo || {};
-    
     return (
       personData.nombres === contactInfo.nombres &&
       personData.apellidoPaterno === contactInfo.apellidoPaterno &&
@@ -77,7 +104,7 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
   const PersonForm = ({ personType }) => {
     const personData = formData.personsInvolved[personType] || {};
     const isSameAsContact = isContactDataSame(personType);
-    
+
     return (
       <div className="space-y-6">
         {/* Same as contact checkbox */}
@@ -125,7 +152,6 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
                 placeholder="Nombre(s)"
               />
             </div>
-            
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Apellido Paterno *
@@ -140,7 +166,6 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
               />
             </div>
           </div>
-
           <div className="grid md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -155,7 +180,6 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
                 placeholder="Apellido materno"
               />
             </div>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Teléfono *
@@ -170,7 +194,6 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
               />
             </div>
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Correo Electrónico *
