@@ -23,30 +23,69 @@ const DocumentsSection = ({ formData, updateFormData }) => {
       if (!newFiles[documentType]) {
         newFiles[documentType] = [];
       }
-      
+
       for (let file of Array.from(files)) {
         // Generar un nombre de archivo único para evitar colisiones
         const fileExt = file.name.split('.').pop();
         const fileName = `${documentType}_${Date.now()}.${fileExt}`;
         const filePath = `${formData.insuranceCompany}/${formData.claimType}/${fileName}`;
         
-        // Subir el archivo a Supabase Storage
+        console.log('Intentando subir archivo:', filePath);
+
+        // Comprobar si el bucket existe y crearlo si no
+        try {
+          const { data: buckets } = await supabase.storage.listBuckets();
+          const bucketExists = buckets.some(bucket => bucket.name === 'claim_documents');
+          
+          if (!bucketExists) {
+            console.log('El bucket no existe, intentando crearlo');
+            // Intentar crear el bucket
+            const { data: newBucket, error: bucketError } = await supabase.storage.createBucket('claim_documents', {
+              public: true
+            });
+            
+            if (bucketError) {
+              console.error('Error al crear el bucket:', bucketError);
+              throw bucketError;
+            } else {
+              console.log('Bucket creado correctamente:', newBucket);
+            }
+          } else {
+            console.log('El bucket claim_documents ya existe');
+          }
+        } catch (bucketCheckError) {
+          console.error('Error al verificar o crear el bucket:', bucketCheckError);
+        }
+
+        // Subir el archivo como blob para evitar problemas de tipo
         const { data, error } = await supabase.storage
           .from('claim_documents')
           .upload(filePath, file, {
             cacheControl: '3600',
-            upsert: false
+            upsert: false,
+            contentType: file.type // Asegurarse de que se establece el tipo de contenido
           });
-        
+
         if (error) {
           console.error('Error al subir archivo:', error);
-          setUploadError(`Error al subir ${file.name}: ${error.message}`);
+          
+          // Si el error es de permisos, intentar una solución alternativa
+          if (error.message && error.message.includes('security policy')) {
+            setUploadError(`Error de permisos: ${error.message}. Por favor, contacta a soporte.`);
+          } else {
+            setUploadError(`Error al subir ${file.name}: ${error.message}`);
+          }
+          
+          // Continuar con los demás archivos a pesar del error
         } else {
+          console.log('Archivo subido correctamente:', data);
+          
           // Obtener la URL pública del archivo
           const { data: { publicUrl } } = supabase.storage
             .from('claim_documents')
             .getPublicUrl(filePath);
-          
+
+          // Almacenar la información del archivo
           newFiles[documentType].push({
             name: file.name,
             size: file.size,
@@ -57,7 +96,8 @@ const DocumentsSection = ({ formData, updateFormData }) => {
           });
         }
       }
-      
+
+      // Actualizar el estado local y el formulario con los archivos subidos exitosamente
       setUploadedFiles(newFiles);
       updateFormData('documents', newFiles);
     } catch (error) {
@@ -70,10 +110,11 @@ const DocumentsSection = ({ formData, updateFormData }) => {
 
   const removeFile = async (documentType, fileIndex) => {
     const newFiles = { ...uploadedFiles };
+    
     if (newFiles[documentType]) {
       const fileToRemove = newFiles[documentType][fileIndex];
       
-      // Si el archivo se subió a Supabase, eliminarlo del almacenamiento
+      // Si el archivo se subió a Supabase, intentar eliminarlo del almacenamiento
       if (fileToRemove.storagePath) {
         try {
           const { error } = await supabase.storage
@@ -82,6 +123,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
             
           if (error) {
             console.error('Error al eliminar archivo de Supabase:', error);
+            // Continuar a pesar del error
           }
         } catch (error) {
           console.error('Error inesperado al eliminar archivo:', error);
@@ -105,138 +147,110 @@ const DocumentsSection = ({ formData, updateFormData }) => {
       sinisterDocs: [],
       receipts: []
     };
-
-    // Forms section
-    requirements.forms.push({
-      id: 'forma-aseguradora',
-      title: 'Forma de la Aseguradora',
-      description: 'Formulario oficial que debe ser firmado'
-    });
-
-    // Sinister documents
-    if (formData.claimType === 'programacion') {
-      requirements.sinisterDocs.push({
-        id: 'informe-medico',
-        title: 'Informe Médico',
-        description: 'Informe médico detallado para programación'
-      });
-      
-      if (formData.programmingService === 'cirugia' && formData.insuranceCompany === 'gnp' && formData.isCirugiaOrtopedica === true) {
-        requirements.sinisterDocs.push({
-          id: 'formato-cirugia',
-          title: 'Formato de Programación de Cirugía',
-          description: 'Formato específico para cirugías de traumatología, ortopedia o neurología'
-        });
+    
+    // Forms section requirements
+    if (formData.insuranceCompany === 'gnp') {
+      if (formData.claimType === 'reembolso') {
+        requirements.forms.push(
+          { id: 'aviso-accidente-enfermedad', title: 'Aviso de Accidente o Enfermedad', description: 'Formulario oficial que debe ser firmado' },
+          { id: 'formato-reembolso', title: 'Formato de Reembolso', description: 'Formulario para solicitar el reembolso' },
+          { id: 'formato-unico-bancario', title: 'Formato Único de Información Bancaria', description: 'Información bancaria para el reembolso' }
+        );
+      } else if (formData.claimType === 'programacion') {
+        requirements.forms.push(
+          { id: 'aviso-accidente-enfermedad-prog', title: 'Aviso de Accidente o Enfermedad', description: 'Formulario oficial para programación' }
+        );
+        
+        if (formData.programmingService === 'cirugia' && formData.isCirugiaOrtopedica === true) {
+          requirements.forms.push(
+            { id: 'formato-cirugia-traumatologia', title: 'Formato de Cirugía de Traumatología, Ortopedia y Neurocirugía', description: 'Formato específico para este tipo de cirugías' }
+          );
+        }
+      }
+    } else if (formData.insuranceCompany === 'axa') {
+      if (formData.claimType === 'programacion') {
+        requirements.forms.push(
+          { id: 'solicitud-programacion-axa', title: 'Solicitud de Programación', description: 'Formulario de AXA para programación' }
+        );
+      } else if (formData.claimType === 'reembolso') {
+        requirements.forms.push(
+          { id: 'solicitud-reembolso-axa', title: 'Solicitud de Reembolso', description: 'Formulario de AXA para reembolso' }
+        );
       }
     }
 
-    if (formData.claimType === 'reembolso') {
-      requirements.sinisterDocs.push({
-        id: 'estado-cuenta',
-        title: 'Carátula del Estado de Cuenta Bancaria',
-        description: 'Para procesar el reembolso'
-      });
+    // Sinister documents
+    if (formData.claimType === 'programacion') {
+      requirements.sinisterDocs.push(
+        { id: 'informe-medico', title: 'Informe Médico', description: 'Informe médico detallado para programación' }
+      );
     }
-
+    
+    if (formData.claimType === 'reembolso') {
+      requirements.sinisterDocs.push(
+        { id: 'estado-cuenta', title: 'Carátula del Estado de Cuenta Bancaria', description: 'Para procesar el reembolso' }
+      );
+    }
+    
     // Receipts and documents
     if (formData.claimType === 'reembolso' && formData.serviceTypes) {
       formData.serviceTypes.forEach(service => {
         switch (service) {
           case 'hospital':
-            requirements.receipts.push({
-              id: 'factura-hospital',
-              title: 'Facturas de Hospital',
-              description: 'Facturas de servicios hospitalarios'
-            });
+            requirements.receipts.push(
+              { id: 'factura-hospital', title: 'Facturas de Hospital', description: 'Facturas de servicios hospitalarios' }
+            );
             break;
           case 'estudios':
-            requirements.receipts.push({
-              id: 'estudios-archivos',
-              title: 'Archivos de Estudios',
-              description: 'Resultados de laboratorio e imagenología'
-            });
-            requirements.receipts.push({
-              id: 'facturas-estudios',
-              title: 'Facturas de Estudios',
-              description: 'Facturas de laboratorio e imagenología'
-            });
+            requirements.receipts.push(
+              { id: 'estudios-archivos', title: 'Archivos de Estudios', description: 'Resultados de laboratorio e imagenología' },
+              { id: 'facturas-estudios', title: 'Facturas de Estudios', description: 'Facturas de laboratorio e imagenología' }
+            );
             break;
           case 'honorarios':
-            requirements.receipts.push({
-              id: 'recibos-medicos',
-              title: 'Recibos y Facturas Médicas',
-              description: 'Honorarios de médicos y especialistas'
-            });
+            requirements.receipts.push(
+              { id: 'recibos-medicos', title: 'Recibos y Facturas Médicas', description: 'Honorarios de médicos y especialistas' }
+            );
             break;
           case 'medicamentos':
-            requirements.receipts.push({
-              id: 'facturas-medicamentos',
-              title: 'Facturas de Medicamentos',
-              description: 'Facturas de farmacias'
-            });
-            requirements.receipts.push({
-              id: 'recetas-medicamentos',
-              title: 'Recetas de Medicamentos',
-              description: 'Recetas con dosis y período de administración'
-            });
+            requirements.receipts.push(
+              { id: 'facturas-medicamentos', title: 'Facturas de Medicamentos', description: 'Facturas de farmacias' },
+              { id: 'recetas-medicamentos', title: 'Recetas de Medicamentos', description: 'Recetas con dosis y período de administración' }
+            );
             break;
           case 'terapia':
-            requirements.receipts.push({
-              id: 'facturas-terapia',
-              title: 'Facturas de Terapia',
-              description: 'Facturas de terapia y rehabilitación'
-            });
-            requirements.receipts.push({
-              id: 'recetas-terapia',
-              title: 'Recetas de Terapias',
-              description: 'Prescripciones médicas para terapias'
-            });
-            requirements.receipts.push({
-              id: 'carnet-asistencia',
-              title: 'Carnet de Asistencia a Terapias',
-              description: 'Registro de asistencia a sesiones'
-            });
+            requirements.receipts.push(
+              { id: 'facturas-terapia', title: 'Facturas de Terapia', description: 'Facturas de terapia y rehabilitación' },
+              { id: 'recetas-terapia', title: 'Recetas de Terapias', description: 'Prescripciones médicas para terapias' },
+              { id: 'carnet-asistencia', title: 'Carnet de Asistencia a Terapias', description: 'Registro de asistencia a sesiones' }
+            );
             break;
         }
       });
     }
-
+    
     if (formData.claimType === 'programacion') {
       switch (formData.programmingService) {
         case 'cirugia':
-          requirements.receipts.push({
-            id: 'interpretacion-estudios-cirugia',
-            title: 'Interpretación de Estudios',
-            description: 'Interpretación de estudios que corroboren el diagnóstico'
-          });
+          requirements.receipts.push(
+            { id: 'interpretacion-estudios-cirugia', title: 'Interpretación de Estudios', description: 'Interpretación de estudios que corroboren el diagnóstico' }
+          );
           break;
         case 'medicamentos':
-          requirements.receipts.push({
-            id: 'recetas-prog-medicamentos',
-            title: 'Recetas de Medicamentos',
-            description: 'Recetas para medicamentos a programar'
-          });
-          requirements.receipts.push({
-            id: 'interpretacion-estudios-med',
-            title: 'Interpretación de Estudios (Opcional)',
-            description: 'Interpretación de estudios que corroboren el diagnóstico'
-          });
+          requirements.receipts.push(
+            { id: 'recetas-prog-medicamentos', title: 'Recetas de Medicamentos', description: 'Recetas para medicamentos a programar' },
+            { id: 'interpretacion-estudios-med', title: 'Interpretación de Estudios (Opcional)', description: 'Interpretación de estudios que corroboren el diagnóstico' }
+          );
           break;
         case 'terapia':
-          requirements.receipts.push({
-            id: 'bitacora-medico',
-            title: 'Bitácora del Médico',
-            description: 'Indicación de terapias, sesiones y tiempos'
-          });
-          requirements.receipts.push({
-            id: 'interpretacion-estudios-terapia',
-            title: 'Interpretación de Estudios',
-            description: 'Interpretación de estudios que corroboren el diagnóstico'
-          });
+          requirements.receipts.push(
+            { id: 'bitacora-medico', title: 'Bitácora del Médico', description: 'Indicación de terapias, sesiones y tiempos' },
+            { id: 'interpretacion-estudios-terapia', title: 'Interpretación de Estudios', description: 'Interpretación de estudios que corroboren el diagnóstico' }
+          );
           break;
       }
     }
-
+    
     return requirements;
   };
 
@@ -284,7 +298,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
         </div>
       );
     }
-
+    
     return (
       <div className="space-y-3">
         {files.map((file, index) => (
@@ -364,19 +378,34 @@ const DocumentsSection = ({ formData, updateFormData }) => {
           className="bg-red-50 text-red-800 p-4 rounded-lg mb-6"
         >
           {uploadError}
+          <p className="mt-2 text-sm">
+            Alternativa: Puedes enviar los documentos por correo electrónico a support@fortex.com mencionando tu número de reclamo.
+          </p>
         </motion.div>
       )}
 
       {requirements.forms.length > 0 && (
-        <DocumentSection title="1. Formas de la Aseguradora" documents={requirements.forms} bgColor="bg-blue-50" />
+        <DocumentSection
+          title="1. Formas de la Aseguradora"
+          documents={requirements.forms}
+          bgColor="bg-blue-50"
+        />
       )}
 
       {requirements.sinisterDocs.length > 0 && (
-        <DocumentSection title="2. Documentos del Siniestro" documents={requirements.sinisterDocs} bgColor="bg-green-50" />
+        <DocumentSection
+          title="2. Documentos del Siniestro"
+          documents={requirements.sinisterDocs}
+          bgColor="bg-green-50"
+        />
       )}
 
       {requirements.receipts.length > 0 && (
-        <DocumentSection title="3. Facturas, Recetas y Otros Documentos" documents={requirements.receipts} bgColor="bg-yellow-50" />
+        <DocumentSection
+          title="3. Facturas, Recetas y Otros Documentos"
+          documents={requirements.receipts}
+          bgColor="bg-yellow-50"
+        />
       )}
 
       {/* File Preview Modal */}
@@ -387,7 +416,10 @@ const DocumentsSection = ({ formData, updateFormData }) => {
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
           onClick={() => setPreviewFile(null)}
         >
-          <div className="bg-white rounded-lg max-w-4xl max-h-full overflow-auto" onClick={e => e.stopPropagation()}>
+          <div
+            className="bg-white rounded-lg max-w-4xl max-h-full overflow-auto"
+            onClick={e => e.stopPropagation()}
+          >
             <div className="p-4 border-b flex justify-between items-center">
               <h3 className="font-medium">{previewFile.name}</h3>
               <button
@@ -399,7 +431,11 @@ const DocumentsSection = ({ formData, updateFormData }) => {
             </div>
             <div className="p-4">
               {previewFile.type.startsWith('image/') ? (
-                <img src={previewFile.url} alt={previewFile.name} className="max-w-full h-auto" />
+                <img
+                  src={previewFile.url}
+                  alt={previewFile.name}
+                  className="max-w-full h-auto"
+                />
               ) : (
                 <p className="text-center py-8 text-gray-500">
                   Vista previa no disponible para este tipo de archivo
