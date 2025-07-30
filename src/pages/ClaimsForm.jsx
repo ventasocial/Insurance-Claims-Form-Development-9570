@@ -17,12 +17,14 @@ import TermsAndConditions from '../components/form-steps/TermsAndConditions';
 import FormProgress from '../components/FormProgress';
 import FormNavigation from '../components/FormNavigation';
 import Breadcrumb from '../components/Breadcrumb';
+import FormHeader from '../components/FormHeader';
 
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 import supabase from '../lib/supabase';
+import { getFormDataFromMagicLink, updateMagicLinkFormData } from '../lib/magicLink';
 
-const { FiArrowLeft, FiAlertCircle } = FiIcons;
+const { FiAlertCircle } = FiIcons;
 
 const ClaimsForm = () => {
   const navigate = useNavigate();
@@ -30,6 +32,9 @@ const ClaimsForm = () => {
   const [currentStep, setCurrentStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
+  const [sessionId, setSessionId] = useState(null);
+  const [loadingSession, setLoadingSession] = useState(false);
+  const [sessionError, setSessionError] = useState(null);
 
   const [formData, setFormData] = useState({
     contactInfo: {},
@@ -54,15 +59,74 @@ const ClaimsForm = () => {
     acceptedPrivacy: false
   });
 
-  // Parse URL parameters for specific document fields
+  // Check for session parameter in URL
   useEffect(() => {
     const urlParams = new URLSearchParams(location.search);
+    const session = urlParams.get('session');
+    
+    if (session) {
+      setSessionId(session);
+      setLoadingSession(true);
+      setSessionError(null);
+      
+      getFormDataFromMagicLink(session)
+        .then(savedFormData => {
+          setFormData(savedFormData);
+          
+          // Determine which step to go to based on the saved data
+          const stepToNavigate = determineStepFromFormData(savedFormData);
+          setCurrentStep(stepToNavigate);
+        })
+        .catch(error => {
+          console.error('Error loading session:', error);
+          setSessionError('No se pudo cargar la sesión guardada. El enlace podría haber expirado.');
+        })
+        .finally(() => {
+          setLoadingSession(false);
+        });
+    }
+    
+    // Parse URL parameters for specific document fields
     const missingDocs = urlParams.get('missing');
-    if (missingDocs) {
+    if (missingDocs && !session) {
       // Jump to documents section if specific documents are missing
       setCurrentStep(9); // Documents section step (adjusted for new signature step)
     }
   }, [location]);
+  
+  // Function to determine which step to navigate to based on form data
+  const determineStepFromFormData = (data) => {
+    // Logic to determine the appropriate step based on form completion
+    if (!data.insuranceCompany) return 0;
+    if (!data.claimType) return 1;
+    if (data.claimType === 'reembolso') {
+      if (!data.reimbursementType) return 2;
+      if (!data.serviceTypes || data.serviceTypes.length === 0) return 3;
+      if (!data.sinisterDescription) return 4;
+      // Check if persons involved data is complete
+      const titular = data.personsInvolved?.titularAsegurado || {};
+      if (!titular.nombres) return 5;
+    } else if (data.claimType === 'programacion') {
+      if (!data.programmingService) return 2;
+      // Check if persons involved data is complete
+      const titular = data.personsInvolved?.titularAsegurado || {};
+      if (!titular.nombres) return 3;
+    }
+    
+    // Default to the first step if we can't determine
+    return 0;
+  };
+
+  // Update magic link session when form data changes
+  useEffect(() => {
+    // Only update if we have a valid session and we're not initially loading
+    if (sessionId && !loadingSession && Object.keys(formData).length > 0) {
+      updateMagicLinkFormData(sessionId, formData)
+        .catch(error => {
+          console.error('Error updating session:', error);
+        });
+    }
+  }, [formData, sessionId, loadingSession]);
 
   const updateFormData = (section, data) => {
     setFormData(prev => ({
@@ -293,7 +357,8 @@ const ClaimsForm = () => {
         documentos_por_email: formData.documentsSentByEmail || null,
         estado: 'Enviado',
         aceptacion_terminos: formData.acceptedTerms,
-        aceptacion_privacidad: formData.acceptedPrivacy
+        aceptacion_privacidad: formData.acceptedPrivacy,
+        session_id: sessionId || null
       };
 
       console.log('Enviando datos del reclamo:', reclamacionData);
@@ -335,35 +400,43 @@ const ClaimsForm = () => {
 
   const CurrentStepComponent = currentStepData?.component;
 
+  if (loadingSession) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="bg-white rounded-xl shadow-lg p-8 max-w-md text-center">
+          <div className="animate-spin w-12 h-12 border-4 border-[#204499] border-t-transparent rounded-full mx-auto mb-6"></div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Cargando formulario</h2>
+          <p className="text-gray-600">Estamos recuperando tu información guardada...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Header */}
-      <div className="bg-white shadow-sm">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => navigate('/')}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <SafeIcon icon={FiArrowLeft} className="text-xl text-gray-600" />
-              </motion.button>
-              <img
-                src="https://storage.googleapis.com/msgsndr/HWRXLf7lstECUAG07eRw/media/685d77c05c72d29e532e823f.png"
-                alt="Fortex"
-                className="h-8"
-              />
-            </div>
-            <div className="text-sm text-gray-600">
-              Paso {currentStep + 1} de {steps.length}
-            </div>
-          </div>
-        </div>
-      </div>
+      <FormHeader 
+        currentStep={currentStep} 
+        totalSteps={steps.length} 
+        formData={formData} 
+      />
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Session error message */}
+        {sessionError && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-red-50 text-red-800 p-4 rounded-lg mb-6 flex items-center gap-3"
+          >
+            <SafeIcon icon={FiAlertCircle} className="text-xl flex-shrink-0" />
+            <div>
+              <p className="font-medium">Error al cargar la sesión</p>
+              <p className="text-sm mt-1">{sessionError}</p>
+            </div>
+          </motion.div>
+        )}
+
         {/* Breadcrumb */}
         <Breadcrumb formData={formData} />
 
