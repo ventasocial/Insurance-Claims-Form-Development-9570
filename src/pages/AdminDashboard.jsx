@@ -5,75 +5,224 @@ import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 import supabase from '../lib/supabase';
 
-const { 
-  FiArrowLeft, FiUsers, FiFileText, FiCheckCircle, FiClock, 
-  FiExternalLink, FiDownload, FiLogOut, FiSettings, FiMessageCircle 
+const {
+  FiArrowLeft,
+  FiUsers,
+  FiFileText,
+  FiCheckCircle,
+  FiClock,
+  FiExternalLink,
+  FiDownload,
+  FiLogOut,
+  FiSettings,
+  FiMessageCircle,
+  FiSearch,
+  FiFilter,
+  FiArchive,
+  FiTrash2,
+  FiCalendar,
+  FiCheck,
+  FiX
 } = FiIcons;
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const [submissions, setSubmissions] = useState([]);
+  const [filteredSubmissions, setFilteredSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('submissions');
+  const [selectedItems, setSelectedItems] = useState([]);
+  const [showArchived, setShowArchived] = useState(false);
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
+
+  // Filtros
+  const [filters, setFilters] = useState({
+    searchTerm: '',
+    aseguradora: '',
+    tipoReclamo: '',
+    fechaInicio: '',
+    fechaFin: '',
+    estado: ''
+  });
+
   const [whatsappConfig, setWhatsappConfig] = useState({
     number: '+528122095020',
     message: 'Hola, necesito ayuda con mi reclamo de seguro. Soy cliente de Fortex.',
     enabled: true
   });
+
   const [stats, setStats] = useState({
     total: 0,
     enviados: 0,
     pendientes: 0,
-    documentos: 0
+    documentos: 0,
+    archivados: 0
   });
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Obtener todas las reclamaciones
-        const { data, error } = await supabase
-          .from('reclamaciones_r2x4')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-
-        // Transformar los datos para el formato que necesitamos
-        const formattedData = data.map(item => ({
-          id: item.id,
-          nombre: `${item.contacto_nombres} ${item.contacto_apellido_paterno} ${item.contacto_apellido_materno}`,
-          email: item.contacto_email,
-          aseguradora: item.aseguradora,
-          tipoReclamo: item.tipo_reclamo,
-          fecha: new Date(item.created_at).toISOString().split('T')[0],
-          estado: item.estado,
-          documentos: Object.keys(item.documentos || {}).reduce((acc, key) => {
-            return acc + (item.documentos[key]?.length || 0);
-          }, 0)
-        }));
-
-        setSubmissions(formattedData);
-
-        // Calcular estadísticas
-        const newStats = {
-          total: formattedData.length,
-          enviados: formattedData.filter(s => s.estado === 'Enviado').length,
-          pendientes: formattedData.filter(s => s.estado === 'Pendiente').length,
-          documentos: formattedData.reduce((acc, s) => acc + s.documentos, 0)
-        };
-
-        setStats(newStats);
-      } catch (err) {
-        console.error('Error al cargar los datos:', err);
-        setError('Error al cargar los datos');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchData();
-  }, []);
+  }, [showArchived]);
+
+  useEffect(() => {
+    applyFilters();
+  }, [submissions, filters]);
+
+  const fetchData = async () => {
+    try {
+      // Obtener todas las reclamaciones
+      const { data, error } = await supabase
+        .from('reclamaciones_r2x4')
+        .select('*')
+        .eq('archived', showArchived)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Transformar los datos para el formato que necesitamos
+      const formattedData = data.map(item => ({
+        id: item.id,
+        nombre: `${item.contacto_nombres} ${item.contacto_apellido_paterno} ${item.contacto_apellido_materno}`,
+        email: item.contacto_email,
+        aseguradora: item.aseguradora,
+        tipoReclamo: item.tipo_reclamo,
+        fecha: new Date(item.created_at).toISOString().split('T')[0],
+        estado: item.estado,
+        archived: item.archived || false,
+        documentos: Object.keys(item.documentos || {}).reduce((acc, key) => {
+          return acc + (item.documentos[key]?.length || 0);
+        }, 0)
+      }));
+
+      setSubmissions(formattedData);
+
+      // Calcular estadísticas (incluir todos los registros, no solo los filtrados)
+      const allData = await supabase
+        .from('reclamaciones_r2x4')
+        .select('*');
+
+      if (allData.data) {
+        const newStats = {
+          total: allData.data.filter(s => !s.archived).length,
+          enviados: allData.data.filter(s => s.estado === 'Enviado' && !s.archived).length,
+          pendientes: allData.data.filter(s => s.estado === 'Pendiente' && !s.archived).length,
+          archivados: allData.data.filter(s => s.archived).length,
+          documentos: allData.data
+            .filter(s => !s.archived)
+            .reduce((acc, s) => {
+              return acc + Object.keys(s.documentos || {}).reduce((docAcc, key) => {
+                return docAcc + (s.documentos[key]?.length || 0);
+              }, 0);
+            }, 0)
+        };
+        setStats(newStats);
+      }
+    } catch (err) {
+      console.error('Error al cargar los datos:', err);
+      setError('Error al cargar los datos');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const applyFilters = () => {
+    let filtered = [...submissions];
+
+    // Filtro de búsqueda por nombre
+    if (filters.searchTerm) {
+      filtered = filtered.filter(item =>
+        item.nombre.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
+        item.email.toLowerCase().includes(filters.searchTerm.toLowerCase())
+      );
+    }
+
+    // Filtro por aseguradora
+    if (filters.aseguradora) {
+      filtered = filtered.filter(item => item.aseguradora === filters.aseguradora);
+    }
+
+    // Filtro por tipo de reclamo
+    if (filters.tipoReclamo) {
+      filtered = filtered.filter(item => item.tipoReclamo === filters.tipoReclamo);
+    }
+
+    // Filtro por estado
+    if (filters.estado) {
+      filtered = filtered.filter(item => item.estado === filters.estado);
+    }
+
+    // Filtro por fecha de inicio
+    if (filters.fechaInicio) {
+      filtered = filtered.filter(item => item.fecha >= filters.fechaInicio);
+    }
+
+    // Filtro por fecha de fin
+    if (filters.fechaFin) {
+      filtered = filtered.filter(item => item.fecha <= filters.fechaFin);
+    }
+
+    setFilteredSubmissions(filtered);
+  };
+
+  const handleFilterChange = (filterName, value) => {
+    setFilters(prev => ({
+      ...prev,
+      [filterName]: value
+    }));
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      searchTerm: '',
+      aseguradora: '',
+      tipoReclamo: '',
+      fechaInicio: '',
+      fechaFin: '',
+      estado: ''
+    });
+  };
+
+  const handleSelectAll = (checked) => {
+    if (checked) {
+      setSelectedItems(filteredSubmissions.map(item => item.id));
+    } else {
+      setSelectedItems([]);
+    }
+  };
+
+  const handleSelectItem = (itemId, checked) => {
+    if (checked) {
+      setSelectedItems(prev => [...prev, itemId]);
+    } else {
+      setSelectedItems(prev => prev.filter(id => id !== itemId));
+    }
+  };
+
+  const handleBulkArchive = async () => {
+    if (selectedItems.length === 0) return;
+
+    setBulkActionLoading(true);
+    try {
+      const { error } = await supabase
+        .from('reclamaciones_r2x4')
+        .update({ archived: !showArchived })
+        .in('id', selectedItems);
+
+      if (error) throw error;
+
+      // Refresh data
+      await fetchData();
+      setSelectedItems([]);
+      
+      const action = showArchived ? 'restaurados' : 'archivados';
+      alert(`${selectedItems.length} registro(s) ${action} correctamente`);
+    } catch (err) {
+      console.error('Error en acción masiva:', err);
+      alert('Error al realizar la acción masiva');
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -85,7 +234,6 @@ const AdminDashboard = () => {
   };
 
   const handleWhatsAppConfigSave = () => {
-    // En una implementación real, esto se guardaría en la base de datos
     localStorage.setItem('whatsappConfig', JSON.stringify(whatsappConfig));
     alert('Configuración de WhatsApp guardada correctamente');
   };
@@ -103,8 +251,12 @@ const AdminDashboard = () => {
 
   const generateReturnUrl = (submission) => {
     const baseUrl = window.location.origin + '/#/form';
-    const missingDocs = 'informe-medico,factura-hospital'; // Example missing documents
+    const missingDocs = 'informe-medico,factura-hospital';
     return `${baseUrl}?missing=${missingDocs}&id=${submission.id}`;
+  };
+
+  const getUniqueValues = (field) => {
+    return [...new Set(submissions.map(item => item[field]))].filter(Boolean);
   };
 
   if (loading) {
@@ -120,7 +272,7 @@ const AdminDashboard = () => {
       {/* Header */}
       <div className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <motion.button
                 whileHover={{ scale: 1.05 }}
@@ -130,10 +282,10 @@ const AdminDashboard = () => {
               >
                 <SafeIcon icon={FiArrowLeft} className="text-xl text-gray-600" />
               </motion.button>
-              <h1 className="text-2xl font-bold text-gray-900">Panel de Administrador</h1>
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Panel de Administrador</h1>
             </div>
             <div className="flex items-center gap-4">
-              <img 
+              <img
                 src="https://storage.googleapis.com/msgsndr/HWRXLf7lstECUAG07eRw/media/685d77c05c72d29e532e823f.png"
                 alt="Fortex"
                 className="h-8"
@@ -145,7 +297,7 @@ const AdminDashboard = () => {
                 className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700 transition-colors"
               >
                 <SafeIcon icon={FiLogOut} className="text-gray-600" />
-                Cerrar Sesión
+                <span className="hidden sm:inline">Cerrar Sesión</span>
               </motion.button>
             </div>
           </div>
@@ -166,10 +318,10 @@ const AdminDashboard = () => {
         {/* Tabs */}
         <div className="mb-8">
           <div className="border-b border-gray-200">
-            <nav className="flex space-x-8">
+            <nav className="flex space-x-8 overflow-x-auto">
               <button
                 onClick={() => setActiveTab('submissions')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
                   activeTab === 'submissions'
                     ? 'border-[#204499] text-[#204499]'
                     : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -182,7 +334,7 @@ const AdminDashboard = () => {
               </button>
               <button
                 onClick={() => setActiveTab('whatsapp')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
                   activeTab === 'whatsapp'
                     ? 'border-[#204499] text-[#204499]'
                     : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -201,19 +353,19 @@ const AdminDashboard = () => {
         {activeTab === 'submissions' && (
           <>
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 md:gap-6 mb-8">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-white p-6 rounded-xl shadow-sm"
+                className="bg-white p-4 md:p-6 rounded-xl shadow-sm"
               >
-                <div className="flex items-center gap-4">
-                  <div className="bg-blue-100 p-3 rounded-lg">
-                    <SafeIcon icon={FiUsers} className="text-2xl text-blue-600" />
+                <div className="flex items-center gap-3 md:gap-4">
+                  <div className="bg-blue-100 p-2 md:p-3 rounded-lg">
+                    <SafeIcon icon={FiUsers} className="text-lg md:text-2xl text-blue-600" />
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Total Envíos</p>
-                    <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+                    <p className="text-xs md:text-sm text-gray-600">Total Envíos</p>
+                    <p className="text-lg md:text-2xl font-bold text-gray-900">{stats.total}</p>
                   </div>
                 </div>
               </motion.div>
@@ -222,15 +374,15 @@ const AdminDashboard = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
-                className="bg-white p-6 rounded-xl shadow-sm"
+                className="bg-white p-4 md:p-6 rounded-xl shadow-sm"
               >
-                <div className="flex items-center gap-4">
-                  <div className="bg-green-100 p-3 rounded-lg">
-                    <SafeIcon icon={FiCheckCircle} className="text-2xl text-green-600" />
+                <div className="flex items-center gap-3 md:gap-4">
+                  <div className="bg-green-100 p-2 md:p-3 rounded-lg">
+                    <SafeIcon icon={FiCheckCircle} className="text-lg md:text-2xl text-green-600" />
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Enviados</p>
-                    <p className="text-2xl font-bold text-gray-900">{stats.enviados}</p>
+                    <p className="text-xs md:text-sm text-gray-600">Enviados</p>
+                    <p className="text-lg md:text-2xl font-bold text-gray-900">{stats.enviados}</p>
                   </div>
                 </div>
               </motion.div>
@@ -239,15 +391,15 @@ const AdminDashboard = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
-                className="bg-white p-6 rounded-xl shadow-sm"
+                className="bg-white p-4 md:p-6 rounded-xl shadow-sm"
               >
-                <div className="flex items-center gap-4">
-                  <div className="bg-yellow-100 p-3 rounded-lg">
-                    <SafeIcon icon={FiClock} className="text-2xl text-yellow-600" />
+                <div className="flex items-center gap-3 md:gap-4">
+                  <div className="bg-yellow-100 p-2 md:p-3 rounded-lg">
+                    <SafeIcon icon={FiClock} className="text-lg md:text-2xl text-yellow-600" />
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Pendientes</p>
-                    <p className="text-2xl font-bold text-gray-900">{stats.pendientes}</p>
+                    <p className="text-xs md:text-sm text-gray-600">Pendientes</p>
+                    <p className="text-lg md:text-2xl font-bold text-gray-900">{stats.pendientes}</p>
                   </div>
                 </div>
               </motion.div>
@@ -256,45 +408,203 @@ const AdminDashboard = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
-                className="bg-white p-6 rounded-xl shadow-sm"
+                className="bg-white p-4 md:p-6 rounded-xl shadow-sm"
               >
-                <div className="flex items-center gap-4">
-                  <div className="bg-purple-100 p-3 rounded-lg">
-                    <SafeIcon icon={FiFileText} className="text-2xl text-purple-600" />
+                <div className="flex items-center gap-3 md:gap-4">
+                  <div className="bg-purple-100 p-2 md:p-3 rounded-lg">
+                    <SafeIcon icon={FiFileText} className="text-lg md:text-2xl text-purple-600" />
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Documentos</p>
-                    <p className="text-2xl font-bold text-gray-900">{stats.documentos}</p>
+                    <p className="text-xs md:text-sm text-gray-600">Documentos</p>
+                    <p className="text-lg md:text-2xl font-bold text-gray-900">{stats.documentos}</p>
+                  </div>
+                </div>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                className="bg-white p-4 md:p-6 rounded-xl shadow-sm"
+              >
+                <div className="flex items-center gap-3 md:gap-4">
+                  <div className="bg-gray-100 p-2 md:p-3 rounded-lg">
+                    <SafeIcon icon={FiArchive} className="text-lg md:text-2xl text-gray-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs md:text-sm text-gray-600">Archivados</p>
+                    <p className="text-lg md:text-2xl font-bold text-gray-900">{stats.archivados}</p>
                   </div>
                 </div>
               </motion.div>
             </div>
 
+            {/* Filters and Actions */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+              className="bg-white rounded-xl shadow-sm p-4 md:p-6 mb-6"
+            >
+              <div className="flex flex-col lg:flex-row gap-4 mb-4">
+                {/* Search */}
+                <div className="flex-1">
+                  <div className="relative">
+                    <SafeIcon icon={FiSearch} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Buscar por nombre o email..."
+                      value={filters.searchTerm}
+                      onChange={(e) => handleFilterChange('searchTerm', e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#204499] focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                {/* Toggle archived */}
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showArchived}
+                      onChange={(e) => setShowArchived(e.target.checked)}
+                      className="w-4 h-4 text-[#204499] border-gray-300 rounded focus:ring-[#204499]"
+                    />
+                    <span className="text-sm text-gray-700">Ver archivados</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Filters Row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+                {/* Aseguradora Filter */}
+                <select
+                  value={filters.aseguradora}
+                  onChange={(e) => handleFilterChange('aseguradora', e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#204499] focus:border-transparent text-sm"
+                >
+                  <option value="">Todas las aseguradoras</option>
+                  {getUniqueValues('aseguradora').map(value => (
+                    <option key={value} value={value}>{value.toUpperCase()}</option>
+                  ))}
+                </select>
+
+                {/* Tipo Reclamo Filter */}
+                <select
+                  value={filters.tipoReclamo}
+                  onChange={(e) => handleFilterChange('tipoReclamo', e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#204499] focus:border-transparent text-sm"
+                >
+                  <option value="">Todos los tipos</option>
+                  {getUniqueValues('tipoReclamo').map(value => (
+                    <option key={value} value={value}>{value}</option>
+                  ))}
+                </select>
+
+                {/* Estado Filter */}
+                <select
+                  value={filters.estado}
+                  onChange={(e) => handleFilterChange('estado', e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#204499] focus:border-transparent text-sm"
+                >
+                  <option value="">Todos los estados</option>
+                  {getUniqueValues('estado').map(value => (
+                    <option key={value} value={value}>{value}</option>
+                  ))}
+                </select>
+
+                {/* Fecha Inicio */}
+                <input
+                  type="date"
+                  value={filters.fechaInicio}
+                  onChange={(e) => handleFilterChange('fechaInicio', e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#204499] focus:border-transparent text-sm"
+                  placeholder="Fecha inicio"
+                />
+
+                {/* Fecha Fin */}
+                <input
+                  type="date"
+                  value={filters.fechaFin}
+                  onChange={(e) => handleFilterChange('fechaFin', e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#204499] focus:border-transparent text-sm"
+                  placeholder="Fecha fin"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row gap-3 justify-between">
+                <div className="flex flex-wrap gap-2">
+                  {selectedItems.length > 0 && (
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={handleBulkArchive}
+                      disabled={bulkActionLoading}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        bulkActionLoading
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          : showArchived
+                          ? 'bg-green-500 hover:bg-green-600 text-white'
+                          : 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                      }`}
+                    >
+                      {bulkActionLoading ? (
+                        <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                      ) : (
+                        <SafeIcon icon={showArchived ? FiCheck : FiArchive} className="text-sm" />
+                      )}
+                      {showArchived ? `Restaurar (${selectedItems.length})` : `Archivar (${selectedItems.length})`}
+                    </motion.button>
+                  )}
+
+                  <button
+                    onClick={clearFilters}
+                    className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    <SafeIcon icon={FiX} className="text-sm" />
+                    Limpiar Filtros
+                  </button>
+                </div>
+
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="bg-[#204499] hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                >
+                  <SafeIcon icon={FiDownload} className="text-sm" />
+                  Exportar
+                </motion.button>
+              </div>
+
+              {/* Results count */}
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <p className="text-sm text-gray-600">
+                  Mostrando {filteredSubmissions.length} de {submissions.length} registros
+                  {showArchived && " archivados"}
+                </p>
+              </div>
+            </motion.div>
+
             {/* Submissions Table */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
+              transition={{ delay: 0.6 }}
               className="bg-white rounded-xl shadow-sm overflow-hidden"
             >
-              <div className="px-6 py-4 border-b border-gray-200">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-semibold text-gray-900">Registro de Envíos</h2>
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="bg-[#204499] hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-                  >
-                    <SafeIcon icon={FiDownload} className="text-sm" />
-                    Exportar
-                  </motion.button>
-                </div>
-              </div>
-
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr>
+                      <th className="px-4 py-3 text-left">
+                        <input
+                          type="checkbox"
+                          checked={selectedItems.length === filteredSubmissions.length && filteredSubmissions.length > 0}
+                          onChange={(e) => handleSelectAll(e.target.checked)}
+                          className="w-4 h-4 text-[#204499] border-gray-300 rounded focus:ring-[#204499]"
+                        />
+                      </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Cliente
                       </th>
@@ -319,15 +629,23 @@ const AdminDashboard = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {submissions.length === 0 ? (
+                    {filteredSubmissions.length === 0 ? (
                       <tr>
-                        <td colSpan="7" className="px-6 py-8 text-center text-gray-500">
-                          No hay envíos registrados
+                        <td colSpan="8" className="px-6 py-8 text-center text-gray-500">
+                          No hay envíos registrados {showArchived ? "archivados" : ""} con los filtros aplicados
                         </td>
                       </tr>
                     ) : (
-                      submissions.map((submission) => (
+                      filteredSubmissions.map((submission) => (
                         <tr key={submission.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-4">
+                            <input
+                              type="checkbox"
+                              checked={selectedItems.includes(submission.id)}
+                              onChange={(e) => handleSelectItem(submission.id, e.target.checked)}
+                              className="w-4 h-4 text-[#204499] border-gray-300 rounded focus:ring-[#204499]"
+                            />
+                          </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div>
                               <div className="text-sm font-medium text-gray-900">
@@ -339,7 +657,7 @@ const AdminDashboard = () => {
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {submission.aseguradora}
+                            {submission.aseguradora.toUpperCase()}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                             {submission.tipoReclamo}
@@ -348,7 +666,11 @@ const AdminDashboard = () => {
                             {submission.fecha}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(submission.estado)}`}>
+                            <span
+                              className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(
+                                submission.estado
+                              )}`}
+                            >
                               {submission.estado}
                             </span>
                           </td>
@@ -403,7 +725,9 @@ const AdminDashboard = () => {
                   <input
                     type="checkbox"
                     checked={whatsappConfig.enabled}
-                    onChange={(e) => setWhatsappConfig(prev => ({ ...prev, enabled: e.target.checked }))}
+                    onChange={(e) =>
+                      setWhatsappConfig(prev => ({ ...prev, enabled: e.target.checked }))
+                    }
                     className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
                   />
                   <span className="font-medium text-gray-900">Habilitar widget de WhatsApp</span>
@@ -417,7 +741,9 @@ const AdminDashboard = () => {
                 <input
                   type="text"
                   value={whatsappConfig.number}
-                  onChange={(e) => setWhatsappConfig(prev => ({ ...prev, number: e.target.value }))}
+                  onChange={(e) =>
+                    setWhatsappConfig(prev => ({ ...prev, number: e.target.value }))
+                  }
                   placeholder="+52 81 2209 5020"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 />
@@ -432,7 +758,9 @@ const AdminDashboard = () => {
                 </label>
                 <textarea
                   value={whatsappConfig.message}
-                  onChange={(e) => setWhatsappConfig(prev => ({ ...prev, message: e.target.value }))}
+                  onChange={(e) =>
+                    setWhatsappConfig(prev => ({ ...prev, message: e.target.value }))
+                  }
                   rows={4}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
                   placeholder="Mensaje que se enviará automáticamente cuando el usuario haga clic en el widget"
@@ -451,9 +779,7 @@ const AdminDashboard = () => {
                       <p className="text-sm text-green-600">En línea</p>
                     </div>
                   </div>
-                  <p className="text-sm text-gray-600 mb-3">
-                    {whatsappConfig.message}
-                  </p>
+                  <p className="text-sm text-gray-600 mb-3">{whatsappConfig.message}</p>
                   <div className="bg-green-500 text-white py-2 px-4 rounded-lg text-sm text-center">
                     Iniciar Chat
                   </div>
