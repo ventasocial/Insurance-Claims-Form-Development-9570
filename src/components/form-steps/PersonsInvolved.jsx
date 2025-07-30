@@ -3,11 +3,11 @@ import { motion } from 'framer-motion';
 import SafeIcon from '../../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
-const { FiUser, FiCopy, FiCheck, FiUserCheck } = FiIcons;
+const { FiUser, FiUserCheck } = FiIcons;
 
 const PersonsInvolved = ({ formData, updateFormData }) => {
   const [activeTab, setActiveTab] = useState('titularAsegurado');
-  
+
   // Determinar qué pestañas mostrar basado en el tipo de reclamo
   const getPersonTypes = () => {
     const baseTypes = [
@@ -22,7 +22,7 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
         description: 'Persona que requiere atención'
       }
     ];
-    
+
     // Agregar titular de cuenta bancaria solo si es reembolso
     if (formData.claimType === 'reembolso') {
       baseTypes.push({
@@ -31,12 +31,12 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
         description: 'Para reembolsos'
       });
     }
-    
+
     return baseTypes;
   };
 
   const personTypes = getPersonTypes();
-  
+
   // Si el activeTab ya no está en personTypes, resetear a la primera pestaña
   useEffect(() => {
     if (!personTypes.some(type => type.id === activeTab)) {
@@ -83,21 +83,6 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
     }
   };
 
-  const copyFromContact = (personType) => {
-    const contactData = {
-      nombres: formData.contactInfo?.nombres || '',
-      apellidoPaterno: formData.contactInfo?.apellidoPaterno || '',
-      apellidoMaterno: formData.contactInfo?.apellidoMaterno || '',
-      telefono: formData.contactInfo?.telefono || '',
-      email: formData.contactInfo?.email || ''
-    };
-    
-    updateFormData('personsInvolved', {
-      ...formData.personsInvolved,
-      [personType]: contactData
-    });
-  };
-
   const isContactDataSame = (personType) => {
     const personData = formData.personsInvolved[personType] || {};
     const contactInfo = formData.contactInfo || {};
@@ -111,9 +96,23 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
     );
   };
 
+  // Validación de WhatsApp
+  const validateWhatsApp = (phone) => {
+    const phoneRegex = /^\+52\d{10}$/;
+    return phoneRegex.test(phone);
+  };
+
+  // Validación de email
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
   const PersonForm = ({ personType }) => {
     const personData = formData.personsInvolved[personType] || {};
     const isSameAsContact = isContactDataSame(personType);
+    const isWhatsAppValid = validateWhatsApp(personData.telefono || '');
+    const isEmailValid = validateEmail(personData.email || '');
 
     return (
       <div className="space-y-6">
@@ -133,17 +132,6 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
               </span>
             </div>
           </label>
-          {!isSameAsContact && (
-            <motion.button
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              onClick={() => copyFromContact(personType)}
-              className="mt-3 flex items-center gap-2 px-3 py-2 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg text-sm transition-colors"
-            >
-              <SafeIcon icon={FiCopy} className="text-gray-500" />
-              Copiar datos del contacto
-            </motion.button>
-          )}
         </div>
 
         {/* Form fields */}
@@ -176,6 +164,7 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
               />
             </div>
           </div>
+
           <div className="grid md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -192,18 +181,28 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Teléfono *
+                WhatsApp *
               </label>
               <input
                 type="tel"
                 value={personData.telefono || ''}
                 onChange={(e) => handlePersonDataChange(personType, 'telefono', e.target.value)}
                 disabled={isSameAsContact}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#204499] focus:border-transparent transition-all duration-300 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                placeholder="Teléfono"
+                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#204499] focus:border-transparent transition-all duration-300 disabled:bg-gray-100 disabled:cursor-not-allowed ${
+                  personData.telefono && !isWhatsAppValid && !isSameAsContact
+                    ? 'border-red-300 bg-red-50' 
+                    : 'border-gray-300'
+                }`}
+                placeholder="+528122334455"
               />
+              {personData.telefono && !isWhatsAppValid && !isSameAsContact && (
+                <p className="text-red-500 text-sm mt-1">
+                  Formato requerido: +528122334455 (código de país +52 seguido de 10 dígitos)
+                </p>
+              )}
             </div>
           </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Correo Electrónico *
@@ -213,9 +212,18 @@ const PersonsInvolved = ({ formData, updateFormData }) => {
               value={personData.email || ''}
               onChange={(e) => handlePersonDataChange(personType, 'email', e.target.value)}
               disabled={isSameAsContact}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#204499] focus:border-transparent transition-all duration-300 disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#204499] focus:border-transparent transition-all duration-300 disabled:bg-gray-100 disabled:cursor-not-allowed ${
+                personData.email && !isEmailValid && !isSameAsContact
+                  ? 'border-red-300 bg-red-50' 
+                  : 'border-gray-300'
+              }`}
               placeholder="correo@email.com"
             />
+            {personData.email && !isEmailValid && !isSameAsContact && (
+              <p className="text-red-500 text-sm mt-1">
+                Ingresa un correo electrónico válido (ejemplo: usuario@dominio.com)
+              </p>
+            )}
           </div>
         </div>
       </div>

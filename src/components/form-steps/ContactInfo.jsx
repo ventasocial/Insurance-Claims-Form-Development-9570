@@ -9,6 +9,21 @@ const ContactInfo = ({ formData, updateFormData }) => {
     });
   };
 
+  // Validación de WhatsApp
+  const validateWhatsApp = (phone) => {
+    const phoneRegex = /^\+52\d{10}$/;
+    return phoneRegex.test(phone);
+  };
+
+  // Validación de email
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const isWhatsAppValid = validateWhatsApp(formData.contactInfo?.telefono || '');
+  const isEmailValid = validateEmail(formData.contactInfo?.email || '');
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -66,15 +81,24 @@ const ContactInfo = ({ formData, updateFormData }) => {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Teléfono *
+            WhatsApp *
           </label>
           <input
             type="tel"
             value={formData.contactInfo?.telefono || ''}
             onChange={(e) => handleChange('telefono', e.target.value)}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#204499] focus:border-transparent transition-all duration-300 text-lg"
-            placeholder="Ej: +52 55 1234 5678"
+            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#204499] focus:border-transparent transition-all duration-300 text-lg ${
+              formData.contactInfo?.telefono && !isWhatsAppValid 
+                ? 'border-red-300 bg-red-50' 
+                : 'border-gray-300'
+            }`}
+            placeholder="+528122334455"
           />
+          {formData.contactInfo?.telefono && !isWhatsAppValid && (
+            <p className="text-red-500 text-sm mt-1">
+              Formato requerido: +528122334455 (código de país +52 seguido de 10 dígitos)
+            </p>
+          )}
         </div>
 
         <div className="md:col-span-2">
@@ -85,9 +109,18 @@ const ContactInfo = ({ formData, updateFormData }) => {
             type="email"
             value={formData.contactInfo?.email || ''}
             onChange={(e) => handleChange('email', e.target.value)}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#204499] focus:border-transparent transition-all duration-300 text-lg"
+            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#204499] focus:border-transparent transition-all duration-300 text-lg ${
+              formData.contactInfo?.email && !isEmailValid 
+                ? 'border-red-300 bg-red-50' 
+                : 'border-gray-300'
+            }`}
             placeholder="tu@email.com"
           />
+          {formData.contactInfo?.email && !isEmailValid && (
+            <p className="text-red-500 text-sm mt-1">
+              Ingresa un correo electrónico válido (ejemplo: usuario@dominio.com)
+            </p>
+          )}
         </div>
       </div>
     </motion.div>

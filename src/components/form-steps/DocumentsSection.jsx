@@ -17,16 +17,16 @@ const DocumentsSection = ({ formData, updateFormData }) => {
 
   const handleFileUpload = async (documentType, files) => {
     if (!files || files.length === 0) return;
-    
+
     // Si estamos en modo alternativo, no intentamos subir a Supabase
     if (fallbackMode) {
       handleFallbackUpload(documentType, files);
       return;
     }
-    
+
     setUploading(true);
     setUploadError(null);
-    
+
     try {
       const newFiles = { ...uploadedFiles };
       if (!newFiles[documentType]) {
@@ -38,7 +38,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
         const fileExt = file.name.split('.').pop();
         const fileName = `${documentType}_${Date.now()}.${fileExt}`;
         const filePath = `public/${formData.insuranceCompany}/${formData.claimType}/${fileName}`;
-        
+
         console.log('Intentando subir archivo:', filePath);
 
         try {
@@ -53,7 +53,6 @@ const DocumentsSection = ({ formData, updateFormData }) => {
 
           if (error) {
             console.error('Error al subir archivo:', error);
-            
             // Si hay error de políticas de seguridad, cambiar a modo alternativo
             if (error.message && error.message.includes('security policy')) {
               setUploadError(`Error de permisos: ${error.message}`);
@@ -65,7 +64,6 @@ const DocumentsSection = ({ formData, updateFormData }) => {
             }
           } else {
             console.log('Archivo subido correctamente:', data);
-            
             // Obtener la URL pública del archivo
             const { data: { publicUrl } } = supabase.storage
               .from('claim_documents')
@@ -133,7 +131,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
     // En un caso real, aquí se enviarían los archivos por email
     // Por ahora, solo mostramos un mensaje de confirmación
     alert(`Los documentos se enviarán a: ${emailToSend}\n\nPor favor, espera la confirmación del equipo de soporte.`);
-    
+
     // Actualizar el estado del formulario para indicar que se usó el método de email
     updateFormData('documentsSentByEmail', {
       email: emailToSend,
@@ -143,17 +141,16 @@ const DocumentsSection = ({ formData, updateFormData }) => {
 
   const removeFile = async (documentType, fileIndex) => {
     const newFiles = { ...uploadedFiles };
-    
     if (newFiles[documentType]) {
       const fileToRemove = newFiles[documentType][fileIndex];
-      
+
       // Si el archivo se subió a Supabase, intentar eliminarlo del almacenamiento
       if (fileToRemove.storagePath && !fileToRemove.isLocal) {
         try {
           const { error } = await supabase.storage
             .from('claim_documents')
             .remove([fileToRemove.storagePath]);
-            
+
           if (error) {
             console.error('Error al eliminar archivo de Supabase:', error);
           }
@@ -161,13 +158,13 @@ const DocumentsSection = ({ formData, updateFormData }) => {
           console.error('Error inesperado al eliminar archivo:', error);
         }
       }
-      
+
       // Eliminar el archivo de la lista local
       newFiles[documentType].splice(fileIndex, 1);
       if (newFiles[documentType].length === 0) {
         delete newFiles[documentType];
       }
-      
+
       setUploadedFiles(newFiles);
       updateFormData('documents', newFiles);
     }
@@ -179,110 +176,183 @@ const DocumentsSection = ({ formData, updateFormData }) => {
       sinisterDocs: [],
       receipts: []
     };
-    
+
+    // SIEMPRE agregar informe médico para todos los tipos de reclamos y aseguradoras
+    requirements.sinisterDocs.push({
+      id: 'informe-medico',
+      title: 'Informe Médico',
+      description: 'Informe médico detallado (Requerido para todos los reclamos)'
+    });
+
     // Forms section requirements
     if (formData.insuranceCompany === 'gnp') {
       if (formData.claimType === 'reembolso') {
         requirements.forms.push(
-          { id: 'aviso-accidente-enfermedad', title: 'Aviso de Accidente o Enfermedad', description: 'Formulario oficial que debe ser firmado' },
-          { id: 'formato-reembolso', title: 'Formato de Reembolso', description: 'Formulario para solicitar el reembolso' },
-          { id: 'formato-unico-bancario', title: 'Formato Único de Información Bancaria', description: 'Información bancaria para el reembolso' }
+          {
+            id: 'aviso-accidente-enfermedad',
+            title: 'Aviso de Accidente o Enfermedad',
+            description: 'Formulario oficial que debe ser firmado'
+          },
+          {
+            id: 'formato-reembolso',
+            title: 'Formato de Reembolso',
+            description: 'Formulario para solicitar el reembolso'
+          },
+          {
+            id: 'formato-unico-bancario',
+            title: 'Formato Único de Información Bancaria',
+            description: 'Información bancaria para el reembolso'
+          }
         );
       } else if (formData.claimType === 'programacion') {
-        requirements.forms.push(
-          { id: 'aviso-accidente-enfermedad-prog', title: 'Aviso de Accidente o Enfermedad', description: 'Formulario oficial para programación' }
-        );
-        
+        requirements.forms.push({
+          id: 'aviso-accidente-enfermedad-prog',
+          title: 'Aviso de Accidente o Enfermedad',
+          description: 'Formulario oficial para programación'
+        });
+
         if (formData.programmingService === 'cirugia' && formData.isCirugiaOrtopedica === true) {
-          requirements.forms.push(
-            { id: 'formato-cirugia-traumatologia', title: 'Formato de Cirugía de Traumatología, Ortopedia y Neurocirugía', description: 'Formato específico para este tipo de cirugías' }
-          );
+          requirements.forms.push({
+            id: 'formato-cirugia-traumatologia',
+            title: 'Formato de Cirugía de Traumatología, Ortopedia y Neurocirugía',
+            description: 'Formato específico para este tipo de cirugías'
+          });
         }
       }
     } else if (formData.insuranceCompany === 'axa') {
       if (formData.claimType === 'programacion') {
-        requirements.forms.push(
-          { id: 'solicitud-programacion-axa', title: 'Solicitud de Programación', description: 'Formulario de AXA para programación' }
-        );
+        requirements.forms.push({
+          id: 'solicitud-programacion-axa',
+          title: 'Solicitud de Programación',
+          description: 'Formulario de AXA para programación'
+        });
       } else if (formData.claimType === 'reembolso') {
-        requirements.forms.push(
-          { id: 'solicitud-reembolso-axa', title: 'Solicitud de Reembolso', description: 'Formulario de AXA para reembolso' }
-        );
+        requirements.forms.push({
+          id: 'solicitud-reembolso-axa',
+          title: 'Solicitud de Reembolso',
+          description: 'Formulario de AXA para reembolso'
+        });
       }
     }
 
-    // Sinister documents
-    if (formData.claimType === 'programacion') {
-      requirements.sinisterDocs.push(
-        { id: 'informe-medico', title: 'Informe Médico', description: 'Informe médico detallado para programación' }
-      );
-    }
-    
+    // Additional sinister documents
     if (formData.claimType === 'reembolso') {
-      requirements.sinisterDocs.push(
-        { id: 'estado-cuenta', title: 'Carátula del Estado de Cuenta Bancaria', description: 'Para procesar el reembolso' }
-      );
+      requirements.sinisterDocs.push({
+        id: 'estado-cuenta',
+        title: 'Carátula del Estado de Cuenta Bancaria',
+        description: 'Para procesar el reembolso'
+      });
     }
-    
+
     // Receipts and documents
     if (formData.claimType === 'reembolso' && formData.serviceTypes) {
       formData.serviceTypes.forEach(service => {
         switch (service) {
           case 'hospital':
-            requirements.receipts.push(
-              { id: 'factura-hospital', title: 'Facturas de Hospital', description: 'Facturas de servicios hospitalarios' }
-            );
+            requirements.receipts.push({
+              id: 'factura-hospital',
+              title: 'Facturas de Hospital',
+              description: 'Facturas de servicios hospitalarios'
+            });
             break;
           case 'estudios':
             requirements.receipts.push(
-              { id: 'estudios-archivos', title: 'Archivos de Estudios', description: 'Resultados de laboratorio e imagenología' },
-              { id: 'facturas-estudios', title: 'Facturas de Estudios', description: 'Facturas de laboratorio e imagenología' }
+              {
+                id: 'estudios-archivos',
+                title: 'Archivos de Estudios',
+                description: 'Resultados de laboratorio e imagenología'
+              },
+              {
+                id: 'facturas-estudios',
+                title: 'Facturas de Estudios',
+                description: 'Facturas de laboratorio e imagenología'
+              }
             );
             break;
           case 'honorarios':
-            requirements.receipts.push(
-              { id: 'recibos-medicos', title: 'Recibos y Facturas Médicas', description: 'Honorarios de médicos y especialistas' }
-            );
+            requirements.receipts.push({
+              id: 'recibos-medicos',
+              title: 'Recibos y Facturas Médicas',
+              description: 'Honorarios de médicos y especialistas'
+            });
             break;
           case 'medicamentos':
             requirements.receipts.push(
-              { id: 'facturas-medicamentos', title: 'Facturas de Medicamentos', description: 'Facturas de farmacias' },
-              { id: 'recetas-medicamentos', title: 'Recetas de Medicamentos', description: 'Recetas con dosis y período de administración' }
+              {
+                id: 'facturas-medicamentos',
+                title: 'Facturas de Medicamentos',
+                description: 'Facturas de farmacias'
+              },
+              {
+                id: 'recetas-medicamentos',
+                title: 'Recetas de Medicamentos',
+                description: 'Recetas con dosis y período de administración'
+              }
             );
             break;
           case 'terapia':
             requirements.receipts.push(
-              { id: 'facturas-terapia', title: 'Facturas de Terapia', description: 'Facturas de terapia y rehabilitación' },
-              { id: 'recetas-terapia', title: 'Recetas de Terapias', description: 'Prescripciones médicas para terapias' },
-              { id: 'carnet-asistencia', title: 'Carnet de Asistencia a Terapias', description: 'Registro de asistencia a sesiones' }
+              {
+                id: 'facturas-terapia',
+                title: 'Facturas de Terapia',
+                description: 'Facturas de terapia y rehabilitación'
+              },
+              {
+                id: 'recetas-terapia',
+                title: 'Recetas de Terapias',
+                description: 'Prescripciones médicas para terapias'
+              },
+              {
+                id: 'carnet-asistencia',
+                title: 'Carnet de Asistencia a Terapias',
+                description: 'Registro de asistencia a sesiones'
+              }
             );
             break;
         }
       });
     }
-    
+
     if (formData.claimType === 'programacion') {
       switch (formData.programmingService) {
         case 'cirugia':
-          requirements.receipts.push(
-            { id: 'interpretacion-estudios-cirugia', title: 'Interpretación de Estudios', description: 'Interpretación de estudios que corroboren el diagnóstico' }
-          );
+          requirements.receipts.push({
+            id: 'interpretacion-estudios-cirugia',
+            title: 'Interpretación de Estudios',
+            description: 'Interpretación de estudios que corroboren el diagnóstico'
+          });
           break;
         case 'medicamentos':
           requirements.receipts.push(
-            { id: 'recetas-prog-medicamentos', title: 'Recetas de Medicamentos', description: 'Recetas para medicamentos a programar' },
-            { id: 'interpretacion-estudios-med', title: 'Interpretación de Estudios (Opcional)', description: 'Interpretación de estudios que corroboren el diagnóstico' }
+            {
+              id: 'recetas-prog-medicamentos',
+              title: 'Recetas de Medicamentos',
+              description: 'Recetas para medicamentos a programar'
+            },
+            {
+              id: 'interpretacion-estudios-med',
+              title: 'Interpretación de Estudios (Opcional)',
+              description: 'Interpretación de estudios que corroboren el diagnóstico'
+            }
           );
           break;
         case 'terapia':
           requirements.receipts.push(
-            { id: 'bitacora-medico', title: 'Bitácora del Médico', description: 'Indicación de terapias, sesiones y tiempos' },
-            { id: 'interpretacion-estudios-terapia', title: 'Interpretación de Estudios', description: 'Interpretación de estudios que corroboren el diagnóstico' }
+            {
+              id: 'bitacora-medico',
+              title: 'Bitácora del Médico',
+              description: 'Indicación de terapias, sesiones y tiempos'
+            },
+            {
+              id: 'interpretacion-estudios-terapia',
+              title: 'Interpretación de Estudios',
+              description: 'Interpretación de estudios que corroboren el diagnóstico'
+            }
           );
           break;
       }
     }
-    
+
     return requirements;
   };
 
@@ -335,7 +405,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
         </div>
       );
     }
-    
+
     return (
       <div className="space-y-3">
         {files.map((file, index) => (
@@ -450,15 +520,14 @@ const DocumentsSection = ({ formData, updateFormData }) => {
             <li>Completar el resto del formulario normalmente</li>
             <li>Al final del proceso, podrás enviar los documentos por correo electrónico</li>
           </ol>
-          
           {showEmailForm ? (
             <div className="mt-4 bg-white p-4 rounded-lg border border-gray-200">
               <div className="mb-3">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Correo electrónico para enviar documentos:
                 </label>
-                <input 
-                  type="email" 
+                <input
+                  type="email"
                   value={emailToSend}
                   onChange={(e) => setEmailToSend(e.target.value)}
                   placeholder="tucorreo@ejemplo.com"

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
+
 import ContactInfo from '../components/form-steps/ContactInfo';
 import InsuranceCompany from '../components/form-steps/InsuranceCompany';
 import ClaimType from '../components/form-steps/ClaimType';
@@ -12,9 +13,11 @@ import PersonsInvolved from '../components/form-steps/PersonsInvolved';
 import SignatureDocuments from '../components/form-steps/SignatureDocuments';
 import DocumentsSection from '../components/form-steps/DocumentsSection';
 import TermsAndConditions from '../components/form-steps/TermsAndConditions';
+
 import FormProgress from '../components/FormProgress';
 import FormNavigation from '../components/FormNavigation';
 import Breadcrumb from '../components/Breadcrumb';
+
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 import supabase from '../lib/supabase';
@@ -27,6 +30,7 @@ const ClaimsForm = () => {
   const [currentStep, setCurrentStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
+
   const [formData, setFormData] = useState({
     contactInfo: {},
     insuranceCompany: '',
@@ -105,13 +109,11 @@ const ClaimsForm = () => {
         }
       );
     } else if (formData.claimType === 'programacion') {
-      baseSteps.push(
-        {
-          id: 'programming',
-          title: 'Detalles de Programación',
-          component: ProgrammingDetails
-        }
-      );
+      baseSteps.push({
+        id: 'programming',
+        title: 'Detalles de Programación',
+        component: ProgrammingDetails
+      });
     }
 
     if (formData.claimType) {
@@ -145,43 +147,78 @@ const ClaimsForm = () => {
   const steps = getSteps();
   const currentStepData = steps[currentStep];
 
+  // Validaciones mejoradas
+  const validateWhatsApp = (phone) => {
+    const phoneRegex = /^\+52\d{10}$/;
+    return phoneRegex.test(phone);
+  };
+
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
   const canProceed = () => {
     switch (currentStepData?.id) {
       case 'contact':
-        return formData.contactInfo.nombres && 
-               formData.contactInfo.apellidoPaterno && 
-               formData.contactInfo.apellidoMaterno && 
-               formData.contactInfo.email && 
-               formData.contactInfo.telefono;
+        const contactInfo = formData.contactInfo;
+        return (
+          contactInfo.nombres &&
+          contactInfo.apellidoPaterno &&
+          contactInfo.apellidoMaterno &&
+          contactInfo.email &&
+          validateEmail(contactInfo.email) &&
+          contactInfo.telefono &&
+          validateWhatsApp(contactInfo.telefono)
+        );
+
       case 'insurance':
         return formData.insuranceCompany;
+
       case 'claimType':
         return formData.claimType;
+
       case 'reimbursement':
         return formData.reimbursementType && 
                (formData.reimbursementType === 'inicial' || formData.claimNumber);
+
       case 'services':
         return formData.serviceTypes.length > 0;
+
       case 'description':
         return formData.sinisterDescription.trim().length > 10;
+
       case 'programming':
         return formData.programmingService && 
                (formData.programmingService !== 'cirugia' || 
                 formData.insuranceCompany !== 'gnp' || 
                 formData.isCirugiaOrtopedica !== undefined);
+
       case 'persons':
         // Verificar que al menos el titular del seguro tenga la información completa
         const titular = formData.personsInvolved.titularAsegurado || {};
         const requiredFields = ['nombres', 'apellidoPaterno', 'apellidoMaterno', 'email', 'telefono'];
-        return requiredFields.every(field => titular[field] && titular[field].trim() !== '');
+        return requiredFields.every(field => titular[field] && titular[field].trim() !== '') &&
+               validateEmail(titular.email || '') &&
+               validateWhatsApp(titular.telefono || '');
+
       case 'signature':
         // Check if signature document option is selected
         const hasSignatureDocs = getSignatureDocuments().length > 0;
         if (!hasSignatureDocs) return true; // Skip if no signature documents needed
+        
         return formData.signatureDocumentOption && 
-               (formData.signatureDocumentOption !== 'email' || formData.emailForDigitalSignature);
+               (formData.signatureDocumentOption !== 'email' || 
+                (formData.emailForDigitalSignature && validateEmail(formData.emailForDigitalSignature)));
+
+      case 'documents':
+        // Verificar que el informe médico esté presente
+        const documents = formData.documents || {};
+        return documents['informe-medico'] && documents['informe-medico'].length > 0;
+
       case 'terms':
         return formData.acceptedTerms && formData.acceptedPrivacy;
+
       default:
         return true;
     }
