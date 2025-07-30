@@ -16,14 +16,15 @@ export const generateMagicLink = async (formData) => {
         created_at: new Date().toISOString(),
         expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days expiry
       })
-      .select('id');
+      .select('id')
+      .single();
 
     if (error) {
       console.error('Error creating magic link:', error);
       throw error;
     }
 
-    return data[0].id;
+    return data.id;
   } catch (error) {
     console.error('Failed to generate magic link:', error);
     throw new Error('No se pudo generar el enlace de acceso');

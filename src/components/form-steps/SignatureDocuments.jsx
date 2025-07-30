@@ -12,7 +12,6 @@ const SignatureDocuments = ({ formData, updateFormData }) => {
   const handleOptionChange = (option) => {
     setSelectedOption(option);
     updateFormData('signatureDocumentOption', option);
-    
     if (option !== 'email') {
       setEmailForDigitalSignature('');
       updateFormData('emailForDigitalSignature', '');
@@ -28,32 +27,69 @@ const SignatureDocuments = ({ formData, updateFormData }) => {
     const documents = [];
     const { insuranceCompany, claimType, programmingService, isCirugiaOrtopedica } = formData;
 
+    // Document URLs mapping
+    const documentUrls = {
+      'aviso-accidente-enfermedad': 'https://storage.googleapis.com/msgsndr/HWRXLf7lstECUAG07eRw/media/685ad998b91260b431827d0f.pdf',
+      'formato-reembolso': 'https://storage.googleapis.com/msgsndr/HWRXLf7lstECUAG07eRw/media/685ad9983daa6bf9a84498d9.pdf',
+      'formato-unico-bancario': 'https://storage.googleapis.com/msgsndr/HWRXLf7lstECUAG07eRw/media/685ad9ea2b37dce8e382a9f9.pdf',
+      'formato-cirugia-traumatologia': 'https://storage.googleapis.com/msgsndr/HWRXLf7lstECUAG07eRw/media/685ad9d24bfc6127d1808e9b.pdf',
+      'solicitud-programacion-axa': 'https://storage.googleapis.com/msgsndr/HWRXLf7lstECUAG07eRw/media/687faba88ffd9e2c5eb0920a.pdf',
+      'solicitud-reembolso-axa': 'https://storage.googleapis.com/msgsndr/HWRXLf7lstECUAG07eRw/media/687faba8023a389f1e952dd6.pdf'
+    };
+
     if (insuranceCompany === 'gnp') {
       if (claimType === 'reembolso') {
         documents.push(
-          { id: 'aviso-accidente-enfermedad', name: 'Aviso de Accidente o Enfermedad', url: '#' },
-          { id: 'formato-reembolso', name: 'Formato de Reembolso', url: '#' },
-          { id: 'formato-unico-bancario', name: 'Formato Único de Información Bancaria', url: '#' }
+          {
+            id: 'aviso-accidente-enfermedad',
+            name: 'Aviso de Accidente o Enfermedad GNP',
+            url: documentUrls['aviso-accidente-enfermedad']
+          },
+          {
+            id: 'formato-reembolso',
+            name: 'Formato de Reembolso GNP',
+            url: documentUrls['formato-reembolso']
+          },
+          {
+            id: 'formato-unico-bancario',
+            name: 'Formato Único de Información Bancaria GNP',
+            url: documentUrls['formato-unico-bancario']
+          }
         );
       } else if (claimType === 'programacion') {
         documents.push(
-          { id: 'aviso-accidente-enfermedad-prog', name: 'Aviso de Accidente o Enfermedad', url: '#' }
+          {
+            id: 'aviso-accidente-enfermedad-prog',
+            name: 'Aviso de Accidente o Enfermedad GNP',
+            url: documentUrls['aviso-accidente-enfermedad']
+          }
         );
-        
         if (programmingService === 'cirugia' && isCirugiaOrtopedica === true) {
           documents.push(
-            { id: 'formato-cirugia-traumatologia', name: 'Formato de Cirugía de Traumatología, Ortopedia y Neurocirugía', url: '#' }
+            {
+              id: 'formato-cirugia-traumatologia',
+              name: 'Formato de Cirugía de Traumatología, Ortopedia y Neurocirugía',
+              url: documentUrls['formato-cirugia-traumatologia']
+            }
           );
         }
       }
     } else if (insuranceCompany === 'axa') {
       if (claimType === 'programacion') {
         documents.push(
-          { id: 'solicitud-programacion-axa', name: 'Solicitud de Programación', url: '#' }
+          {
+            id: 'solicitud-programacion-axa',
+            name: 'Solicitud de Programación AXA',
+            url: documentUrls['solicitud-programacion-axa']
+          }
         );
       } else if (claimType === 'reembolso') {
         documents.push(
-          { id: 'solicitud-reembolso-axa', name: 'Solicitud de Reembolso', url: '#' }
+          {
+            id: 'solicitud-reembolso-axa',
+            name: 'Solicitud de Reembolso AXA',
+            url: documentUrls['solicitud-reembolso-axa']
+          }
         );
       }
     }
@@ -68,9 +104,8 @@ const SignatureDocuments = ({ formData, updateFormData }) => {
   }
 
   const handleDownloadDocument = (document) => {
-    // En una implementación real, esto descargaría el documento
-    console.log('Descargando documento:', document.name);
-    alert(`Descargando: ${document.name}`);
+    // Open the document URL in a new tab for download
+    window.open(document.url, '_blank');
   };
 
   const handleSendByEmail = () => {
@@ -78,9 +113,9 @@ const SignatureDocuments = ({ formData, updateFormData }) => {
       alert('Por favor ingresa un email válido');
       return;
     }
-    // En una implementación real, esto enviaría los documentos por email
-    console.log('Enviando documentos por email a:', emailForDigitalSignature);
-    alert(`Documentos enviados a: ${emailForDigitalSignature}`);
+
+    // Simulate sending documents by email
+    alert(`Los documentos se enviarán a: ${emailForDigitalSignature}\n\nRecibirás los formularios por correo electrónico para firma digital.`);
   };
 
   return (
@@ -124,8 +159,8 @@ const SignatureDocuments = ({ formData, updateFormData }) => {
         <motion.div
           whileHover={{ scale: 1.02 }}
           className={`border-2 rounded-lg p-6 cursor-pointer transition-all duration-300 ${
-            selectedOption === 'download' 
-              ? 'border-[#204499] bg-blue-50' 
+            selectedOption === 'download'
+              ? 'border-[#204499] bg-blue-50'
               : 'border-gray-200 hover:border-gray-300'
           }`}
           onClick={() => handleOptionChange('download')}
@@ -149,7 +184,6 @@ const SignatureDocuments = ({ formData, updateFormData }) => {
               <p className="text-gray-600 text-sm mb-4">
                 Descarga los documentos, imprímelos, fírmalos físicamente y súbelos junto con los demás documentos.
               </p>
-              
               {selectedOption === 'download' && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
@@ -178,8 +212,8 @@ const SignatureDocuments = ({ formData, updateFormData }) => {
         <motion.div
           whileHover={{ scale: 1.02 }}
           className={`border-2 rounded-lg p-6 cursor-pointer transition-all duration-300 ${
-            selectedOption === 'email' 
-              ? 'border-[#204499] bg-blue-50' 
+            selectedOption === 'email'
+              ? 'border-[#204499] bg-blue-50'
               : 'border-gray-200 hover:border-gray-300'
           }`}
           onClick={() => handleOptionChange('email')}
@@ -203,7 +237,6 @@ const SignatureDocuments = ({ formData, updateFormData }) => {
               <p className="text-gray-600 text-sm mb-4">
                 Recibe los documentos por correo electrónico para firmarlos digitalmente y enviarlos de vuelta.
               </p>
-              
               {selectedOption === 'email' && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
@@ -225,7 +258,6 @@ const SignatureDocuments = ({ formData, updateFormData }) => {
                       Puede ser diferente al email de contacto si lo deseas
                     </p>
                   </div>
-                  
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}

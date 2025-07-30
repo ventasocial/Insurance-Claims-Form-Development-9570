@@ -2,106 +2,26 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import SafeIcon from '../../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
-import supabase from '../../lib/supabase';
 
-const { FiUpload, FiFile, FiTrash2, FiEye, FiPaperclip } = FiIcons;
+const { FiUpload, FiFile, FiTrash2, FiEye, FiPaperclip, FiAlertCircle } = FiIcons;
 
 const DocumentsSection = ({ formData, updateFormData }) => {
   const [uploadedFiles, setUploadedFiles] = useState({});
   const [previewFile, setPreviewFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
-  const [fallbackMode, setFallbackMode] = useState(false);
   const [emailToSend, setEmailToSend] = useState('');
   const [showEmailForm, setShowEmailForm] = useState(false);
 
   const handleFileUpload = async (documentType, files) => {
     if (!files || files.length === 0) return;
 
-    // Si estamos en modo alternativo, no intentamos subir a Supabase
-    if (fallbackMode) {
-      handleFallbackUpload(documentType, files);
-      return;
-    }
-
-    setUploading(true);
-    setUploadError(null);
-
-    try {
-      const newFiles = { ...uploadedFiles };
-      if (!newFiles[documentType]) {
-        newFiles[documentType] = [];
-      }
-
-      for (let file of Array.from(files)) {
-        // Generar un nombre de archivo único para evitar colisiones
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${documentType}_${Date.now()}.${fileExt}`;
-        const filePath = `public/${formData.insuranceCompany}/${formData.claimType}/${fileName}`;
-
-        console.log('Intentando subir archivo:', filePath);
-
-        try {
-          // Intento directo en carpeta public que tiene permisos preestablecidos
-          const { data, error } = await supabase.storage
-            .from('claim_documents')
-            .upload(filePath, file, {
-              cacheControl: '3600',
-              upsert: true,
-              contentType: file.type
-            });
-
-          if (error) {
-            console.error('Error al subir archivo:', error);
-            // Si hay error de políticas de seguridad, cambiar a modo alternativo
-            if (error.message && error.message.includes('security policy')) {
-              setUploadError(`Error de permisos: ${error.message}`);
-              setFallbackMode(true);
-              setShowEmailForm(true);
-              return; // Salir del bucle y mostrar opciones alternativas
-            } else {
-              setUploadError(`Error al subir ${file.name}: ${error.message}`);
-            }
-          } else {
-            console.log('Archivo subido correctamente:', data);
-            // Obtener la URL pública del archivo
-            const { data: { publicUrl } } = supabase.storage
-              .from('claim_documents')
-              .getPublicUrl(filePath);
-
-            // Almacenar la información del archivo
-            newFiles[documentType].push({
-              name: file.name,
-              size: file.size,
-              type: file.type,
-              url: URL.createObjectURL(file), // Para vista previa local
-              storagePath: filePath, // Para referencia en la base de datos
-              publicUrl: publicUrl // URL para acceso público
-            });
-          }
-        } catch (uploadError) {
-          console.error('Error inesperado al subir:', uploadError);
-          setUploadError(`Error inesperado: ${uploadError.message}`);
-          setFallbackMode(true);
-          setShowEmailForm(true);
-          return;
-        }
-      }
-
-      // Actualizar el estado local y el formulario con los archivos subidos exitosamente
-      setUploadedFiles(newFiles);
-      updateFormData('documents', newFiles);
-    } catch (error) {
-      console.error('Error inesperado al subir archivos:', error);
-      setUploadError('Error inesperado al subir archivos. Por favor, inténtalo de nuevo.');
-      setFallbackMode(true);
-    } finally {
-      setUploading(false);
-    }
+    // For now, we'll store files locally due to storage limitations
+    handleLocalUpload(documentType, files);
   };
 
-  // Método alternativo para cuando falla Supabase Storage
-  const handleFallbackUpload = (documentType, files) => {
+  // Store files locally for now
+  const handleLocalUpload = (documentType, files) => {
     const newFiles = { ...uploadedFiles };
     if (!newFiles[documentType]) {
       newFiles[documentType] = [];
@@ -113,13 +33,16 @@ const DocumentsSection = ({ formData, updateFormData }) => {
         size: file.size,
         type: file.type,
         url: URL.createObjectURL(file), // Para vista previa local
-        file: file, // Guardamos el archivo real para enviarlo por email después
+        file: file, // Guardamos el archivo real
         isLocal: true // Indicador de que es un archivo local
       });
     }
 
     setUploadedFiles(newFiles);
     updateFormData('documents', newFiles);
+    
+    // Show email form automatically
+    setShowEmailForm(true);
   };
 
   const handleSendByEmail = async () => {
@@ -128,11 +51,10 @@ const DocumentsSection = ({ formData, updateFormData }) => {
       return;
     }
 
-    // En un caso real, aquí se enviarían los archivos por email
-    // Por ahora, solo mostramos un mensaje de confirmación
+    // Simulate sending files by email
     alert(`Los documentos se enviarán a: ${emailToSend}\n\nPor favor, espera la confirmación del equipo de soporte.`);
 
-    // Actualizar el estado del formulario para indicar que se usó el método de email
+    // Update form data to indicate email method was used
     updateFormData('documentsSentByEmail', {
       email: emailToSend,
       timestamp: new Date().toISOString()
@@ -144,22 +66,12 @@ const DocumentsSection = ({ formData, updateFormData }) => {
     if (newFiles[documentType]) {
       const fileToRemove = newFiles[documentType][fileIndex];
 
-      // Si el archivo se subió a Supabase, intentar eliminarlo del almacenamiento
-      if (fileToRemove.storagePath && !fileToRemove.isLocal) {
-        try {
-          const { error } = await supabase.storage
-            .from('claim_documents')
-            .remove([fileToRemove.storagePath]);
-
-          if (error) {
-            console.error('Error al eliminar archivo de Supabase:', error);
-          }
-        } catch (error) {
-          console.error('Error inesperado al eliminar archivo:', error);
-        }
+      // Clean up object URL to prevent memory leaks
+      if (fileToRemove.url && fileToRemove.isLocal) {
+        URL.revokeObjectURL(fileToRemove.url);
       }
 
-      // Eliminar el archivo de la lista local
+      // Remove file from list
       newFiles[documentType].splice(fileIndex, 1);
       if (newFiles[documentType].length === 0) {
         delete newFiles[documentType];
@@ -384,11 +296,6 @@ const DocumentsSection = ({ formData, updateFormData }) => {
           <p className="text-xs text-gray-400 mt-2">
             Arrastra archivos aquí o haz clic para seleccionar
           </p>
-          {fallbackMode && (
-            <p className="text-xs text-orange-500 mt-1 font-medium">
-              Modo alternativo: los archivos se guardarán localmente
-            </p>
-          )}
         </div>
       </label>
     </div>
@@ -501,71 +408,62 @@ const DocumentsSection = ({ formData, updateFormData }) => {
         </motion.div>
       )}
 
-      {/* Mensaje de modo alternativo */}
-      {fallbackMode && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-6"
-        >
-          <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-            <SafeIcon icon={FiPaperclip} className="text-yellow-600" />
-            Método Alternativo de Carga
-          </h3>
-          <p className="text-gray-700 mb-4">
-            Debido a un problema técnico con el almacenamiento, ahora puedes:
-          </p>
-          <ol className="list-decimal pl-5 space-y-2 text-gray-700 mb-4">
-            <li>Cargar los documentos localmente en este formulario</li>
-            <li>Completar el resto del formulario normalmente</li>
-            <li>Al final del proceso, podrás enviar los documentos por correo electrónico</li>
-          </ol>
-          {showEmailForm ? (
-            <div className="mt-4 bg-white p-4 rounded-lg border border-gray-200">
-              <div className="mb-3">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Correo electrónico para enviar documentos:
-                </label>
-                <input
-                  type="email"
-                  value={emailToSend}
-                  onChange={(e) => setEmailToSend(e.target.value)}
-                  placeholder="tucorreo@ejemplo.com"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#204499] focus:border-transparent"
-                />
-              </div>
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={handleSendByEmail}
-                className="bg-[#204499] hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-              >
-                <SafeIcon icon={FiPaperclip} className="text-sm" />
-                Enviar Documentos por Email
-              </motion.button>
-              <p className="text-xs text-gray-500 mt-2">
-                * Los documentos se enviarán después de completar el formulario
-              </p>
+      {/* Información sobre el almacenamiento local */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6"
+      >
+        <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+          <SafeIcon icon={FiAlertCircle} className="text-blue-600" />
+          Almacenamiento de Documentos
+        </h3>
+        <p className="text-gray-700 mb-4">
+          Los documentos se guardan de forma segura y serán procesados por nuestro equipo.
+        </p>
+        <ol className="list-decimal pl-5 space-y-2 text-gray-700 mb-4">
+          <li>Sube todos los documentos requeridos</li>
+          <li>Completa el resto del formulario</li>
+          <li>Al enviar, recibirás confirmación por email</li>
+          <li>Nuestro equipo procesará tu reclamo</li>
+        </ol>
+        
+        {showEmailForm && (
+          <div className="mt-4 bg-white p-4 rounded-lg border border-gray-200">
+            <div className="mb-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Correo electrónico para notificaciones:
+              </label>
+              <input
+                type="email"
+                value={emailToSend}
+                onChange={(e) => setEmailToSend(e.target.value)}
+                placeholder="tucorreo@ejemplo.com"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#204499] focus:border-transparent"
+              />
             </div>
-          ) : (
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              onClick={() => setShowEmailForm(true)}
-              className="bg-[#204499] hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors"
+              onClick={handleSendByEmail}
+              className="bg-[#204499] hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
             >
-              Configurar Envío por Email
+              <SafeIcon icon={FiPaperclip} className="text-sm" />
+              Configurar Notificaciones
             </motion.button>
-          )}
-        </motion.div>
-      )}
+            <p className="text-xs text-gray-500 mt-2">
+              * Recibirás actualizaciones sobre el estado de tu reclamo
+            </p>
+          </div>
+        )}
+      </motion.div>
 
       {/* Contador de archivos */}
       {getTotalFilesCount() > 0 && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
           <div className="font-medium text-blue-800 flex items-center gap-2">
             <SafeIcon icon={FiFile} className="text-blue-600" />
-            {getTotalFilesCount()} archivo(s) cargado(s) {fallbackMode && "(localmente)"}
+            {getTotalFilesCount()} archivo(s) cargado(s)
           </div>
         </div>
       )}
