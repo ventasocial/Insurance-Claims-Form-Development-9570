@@ -7,6 +7,7 @@ import LoginPage from './pages/LoginPage';
 import ThankYouPage from './pages/ThankYouPage';
 import TermsPage from './pages/TermsPage';
 import PrivacyPage from './pages/PrivacyPage';
+import WebhookLogsPage from './pages/WebhookLogsPage';
 import supabase from './lib/supabase';
 import './App.css';
 
@@ -75,13 +76,21 @@ function App() {
           <Route path="/thank-you" element={<ThankYouPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
-          <Route
-            path="/admin"
+          <Route 
+            path="/admin" 
             element={
               <ProtectedRoute>
                 <AdminDashboard />
               </ProtectedRoute>
-            }
+            } 
+          />
+          <Route 
+            path="/webhook-logs" 
+            element={
+              <ProtectedRoute>
+                <WebhookLogsPage />
+              </ProtectedRoute>
+            } 
           />
         </Routes>
       </div>

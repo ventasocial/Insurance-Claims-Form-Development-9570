@@ -43,7 +43,7 @@ export class WebhookService {
       console.log('📤 Final payload being sent:', JSON.stringify(payload, null, 2));
 
       // Disparar cada webhook directamente (sin Edge Functions)
-      const webhookPromises = webhooks.map(webhook => 
+      const webhookPromises = webhooks.map(webhook =>
         this.sendWebhook(webhook, payload)
       );
 
@@ -110,7 +110,6 @@ export class WebhookService {
       // Parsear headers personalizados de manera segura
       try {
         const customHeaders = webhook.headers ? JSON.parse(webhook.headers) : {};
-        
         // Solo añadir headers personalizados si no es Albato
         if (!this.isAlbatoUrl(webhook.url)) {
           headers = { ...headers, ...customHeaders };
@@ -396,7 +395,7 @@ export class WebhookService {
       // Parsear el payload original de manera segura
       let payload;
       try {
-        payload = JSON.parse(log.request_payload || log.payload || '{}');
+        payload = JSON.parse(log.payload || log.request_payload || '{}');
       } catch (e) {
         throw new Error('Invalid payload JSON in log');
       }
@@ -431,7 +430,7 @@ export class WebhookService {
         status_code: statusCode || 0,
         success: success === true, // Asegurar que sea boolean
         response_body: responseBody ? responseBody.substring(0, 5000) : '', // Limitar tamaño
-        request_payload: JSON.stringify(payload).substring(0, 10000), // Usar request_payload en lugar de payload
+        payload: JSON.stringify(payload).substring(0, 10000), // Limitar tamaño del payload
         sent_at: new Date().toISOString(),
         retry_count: payload.retry_count || 0
       };
@@ -441,7 +440,7 @@ export class WebhookService {
         event: logData.event,
         success: logData.success,
         status_code: logData.status_code,
-        payload_size: logData.request_payload.length,
+        payload_size: logData.payload.length,
         response_size: logData.response_body.length
       });
 
@@ -457,7 +456,7 @@ export class WebhookService {
           details: error.details,
           hint: error.hint
         });
-        
+
         // Intentar con datos simplificados si hay error
         const simplifiedLogData = {
           webhook_id: webhookId,
@@ -465,7 +464,7 @@ export class WebhookService {
           status_code: statusCode || 0,
           success: success === true,
           response_body: responseBody ? 'Response received' : 'No response',
-          request_payload: JSON.stringify({ event: payload.event, timestamp: payload.timestamp }),
+          payload: JSON.stringify({ event: payload.event, timestamp: payload.timestamp }),
           sent_at: new Date().toISOString(),
           retry_count: 0
         };

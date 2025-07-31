@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
-
 import InsuranceCompany from '../components/form-steps/InsuranceCompany';
 import ClaimType from '../components/form-steps/ClaimType';
 import ReimbursementDetails from '../components/form-steps/ReimbursementDetails';
@@ -12,14 +11,12 @@ import DocumentChecklist from '../components/form-steps/DocumentChecklist';
 import SinisterDescription from '../components/form-steps/SinisterDescription';
 import DocumentsSection from '../components/form-steps/DocumentsSection';
 import TermsAndConditions from '../components/form-steps/TermsAndConditions';
-
 import FormProgress from '../components/FormProgress';
 import FormNavigation from '../components/FormNavigation';
 import Breadcrumb from '../components/Breadcrumb';
 import FormHeader from '../components/FormHeader';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
-
 import supabase from '../lib/supabase';
 import { getFormDataFromMagicLink, updateMagicLinkFormData } from '../lib/magicLink';
 import WebhookService from '../lib/webhookService';
@@ -98,7 +95,6 @@ const ClaimsForm = () => {
     // Logic to determine the appropriate step based on form completion
     if (!data.insuranceCompany) return 0;
     if (!data.claimType) return 1;
-
     if (data.claimType === 'reembolso') {
       if (!data.reimbursementType) return 2;
       if (!data.serviceTypes || data.serviceTypes.length === 0) return 3;
@@ -115,7 +111,6 @@ const ClaimsForm = () => {
       const contactInfo = data.contactInfo || {};
       if (!contactInfo.nombres) return 4;
     }
-
     // Default to the first step if we can't determine
     return 0;
   };
@@ -174,7 +169,7 @@ const ClaimsForm = () => {
   // Validaciones mejoradas
   const validateWhatsApp = (phone) => {
     if (!phone) return false;
-    const phoneRegex = /^\+52\d{10}$/;
+    const phoneRegex = /^\+\d{1,4}\d{10}$/; // Código de país + 10 dígitos
     return phoneRegex.test(phone);
   };
 
@@ -187,22 +182,18 @@ const ClaimsForm = () => {
     switch (currentStepData?.id) {
       case 'insurance':
         return formData.insuranceCompany;
-
       case 'claimType':
         return formData.claimType;
-
       case 'reimbursement':
-        return formData.reimbursementType && (formData.reimbursementType === 'inicial' || formData.claimNumber);
-
+        return formData.reimbursementType && 
+               (formData.reimbursementType === 'inicial' || formData.claimNumber);
       case 'services':
         return formData.serviceTypes.length > 0;
-
       case 'programming':
         return formData.programmingService && 
                (formData.programmingService !== 'cirugia' || 
                 formData.insuranceCompany !== 'gnp' || 
                 formData.isCirugiaOrtopedica !== undefined);
-
       case 'checklist':
         // Verificar que al menos los documentos requeridos estén marcados y se haya seleccionado una opción de firma
         const requiredDocs = getRequiredDocuments();
@@ -210,70 +201,71 @@ const ClaimsForm = () => {
         const docsToCheck = formData.signatureDocumentOption === 'email' 
           ? requiredDocs.filter(doc => !doc.needsSignature) 
           : requiredDocs;
-        
         return docsToCheck.every(doc => formData.documentChecklist && formData.documentChecklist[doc.id]) &&
                formData.signatureDocumentOption !== undefined && 
                formData.signatureDocumentOption !== '';
-
       case 'persons':
         // Verificar que la información de contacto esté completa
         const contactInfo = formData.contactInfo;
-        const contactValid = contactInfo && 
-                            contactInfo.nombres && 
-                            contactInfo.apellidoPaterno && 
-                            contactInfo.apellidoMaterno && 
-                            contactInfo.email && 
-                            validateEmail(contactInfo.email) && 
-                            contactInfo.telefono && 
-                            validateWhatsApp(contactInfo.telefono);
+        const contactValid = contactInfo &&
+          contactInfo.nombres &&
+          contactInfo.apellidoPaterno &&
+          contactInfo.apellidoMaterno &&
+          contactInfo.email &&
+          validateEmail(contactInfo.email) &&
+          contactInfo.telefono &&
+          validateWhatsApp(contactInfo.telefono);
 
-        // Verificar que al menos el titular del seguro tenga la información completa
-        const titular = formData.personsInvolved.titularAsegurado || {};
-        const titularValid = titular.nombres && 
-                           titular.apellidoPaterno && 
-                           titular.apellidoMaterno && 
-                           titular.email && 
-                           validateEmail(titular.email);
-        // WhatsApp es opcional para titular
-        const titularPhoneValid = !titular.telefono || validateWhatsApp(titular.telefono);
+        // Si se eligió firma por email, verificar también las personas involucradas
+        if (formData.signatureDocumentOption === 'email') {
+          // Verificar que al menos el titular del seguro tenga la información completa
+          const titular = formData.personsInvolved.titularAsegurado || {};
+          const titularValid = titular.nombres &&
+            titular.apellidoPaterno &&
+            titular.apellidoMaterno &&
+            titular.email &&
+            validateEmail(titular.email);
+          // WhatsApp es opcional para titular
+          const titularPhoneValid = !titular.telefono || validateWhatsApp(titular.telefono);
 
-        // Verificar el asegurado afectado
-        const afectado = formData.personsInvolved.aseguradoAfectado || {};
-        const afectadoValid = afectado.nombres && 
-                            afectado.apellidoPaterno && 
-                            afectado.apellidoMaterno && 
-                            afectado.email && 
-                            validateEmail(afectado.email);
-        // WhatsApp es opcional para afectado
-        const afectadoPhoneValid = !afectado.telefono || validateWhatsApp(afectado.telefono);
+          // Verificar el asegurado afectado
+          const afectado = formData.personsInvolved.aseguradoAfectado || {};
+          const afectadoValid = afectado.nombres &&
+            afectado.apellidoPaterno &&
+            afectado.apellidoMaterno &&
+            afectado.email &&
+            validateEmail(afectado.email);
+          // WhatsApp es opcional para afectado
+          const afectadoPhoneValid = !afectado.telefono || validateWhatsApp(afectado.telefono);
 
-        // Si es reembolso, verificar también el titular de la cuenta
-        let cuentaValid = true;
-        if (formData.claimType === 'reembolso') {
-          const cuenta = formData.personsInvolved.titularCuenta || {};
-          cuentaValid = cuenta.nombres && 
-                       cuenta.apellidoPaterno && 
-                       cuenta.apellidoMaterno && 
-                       cuenta.email && 
-                       validateEmail(cuenta.email);
-          // WhatsApp es opcional para titular de cuenta
-          const cuentaPhoneValid = !cuenta.telefono || validateWhatsApp(cuenta.telefono);
-          cuentaValid = cuentaValid && cuentaPhoneValid;
+          // Si es reembolso, verificar también el titular de la cuenta
+          let cuentaValid = true;
+          if (formData.claimType === 'reembolso') {
+            const cuenta = formData.personsInvolved.titularCuenta || {};
+            cuentaValid = cuenta.nombres &&
+              cuenta.apellidoPaterno &&
+              cuenta.apellidoMaterno &&
+              cuenta.email &&
+              validateEmail(cuenta.email);
+            // WhatsApp es opcional para titular de cuenta
+            const cuentaPhoneValid = !cuenta.telefono || validateWhatsApp(cuenta.telefono);
+            cuentaValid = cuentaValid && cuentaPhoneValid;
+          }
+
+          return contactValid && titularValid && titularPhoneValid && 
+                 afectadoValid && afectadoPhoneValid && cuentaValid;
         }
 
-        return contactValid && titularValid && titularPhoneValid && afectadoValid && afectadoPhoneValid && cuentaValid;
-
+        // Si se eligió descarga física, solo verificar contactInfo
+        return contactValid;
       case 'description':
         return formData.sinisterDescription && formData.sinisterDescription.trim().length > 10;
-
       case 'documents':
         // Verificar que el informe médico esté presente
         const documents = formData.documents || {};
         return documents['informe-medico'] && documents['informe-medico'].length > 0;
-
       case 'terms':
         return formData.acceptedTerms && formData.acceptedPrivacy;
-
       default:
         return true;
     }
@@ -508,7 +500,7 @@ const ClaimsForm = () => {
 
     try {
       console.log('Iniciando envío del formulario...');
-      
+
       // Preparar los datos para enviar a Supabase
       const reclamacionData = {
         contacto_nombres: formData.contactInfo.nombres,
@@ -557,7 +549,6 @@ const ClaimsForm = () => {
       // Primero subimos los documentos al bucket de Storage
       if (formData.documents && Object.keys(formData.documents).length > 0) {
         console.log('Subiendo documentos al storage...');
-        
         for (const docType in formData.documents) {
           if (Array.isArray(formData.documents[docType])) {
             for (const doc of formData.documents[docType]) {
@@ -584,7 +575,7 @@ const ClaimsForm = () => {
         console.log('Preparando datos para webhooks...');
         const webhookData = await WebhookService.transformFormDataForWebhook(formData, data[0].id);
         console.log('Datos preparados para webhook:', webhookData);
-        
+
         console.log('Disparando webhooks...');
         await WebhookService.triggerWebhooks('form_submitted', webhookData);
         console.log('Webhooks disparados exitosamente');
@@ -600,7 +591,6 @@ const ClaimsForm = () => {
           submissionId: data[0].id
         }
       });
-
     } catch (error) {
       console.error('Error al enviar el reclamo:', error);
       // Mensaje de error más detallado para ayudar en la depuración

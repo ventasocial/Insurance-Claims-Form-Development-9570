@@ -1,31 +1,39 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 import supabase from '../lib/supabase';
 import WebhookService from '../lib/webhookService';
 
-const { FiLink, FiPlus, FiEdit, FiTrash2, FiToggleLeft, FiToggleRight, FiSave, FiX, FiCheck, FiAlertCircle, FiSettings, FiZap, FiClock, FiList, FiRefreshCw, FiFilter, FiEye, FiWifi, FiInfo } = FiIcons;
+const {
+  FiLink,
+  FiPlus,
+  FiEdit,
+  FiTrash2,
+  FiToggleLeft,
+  FiToggleRight,
+  FiSave,
+  FiX,
+  FiCheck,
+  FiAlertCircle,
+  FiSettings,
+  FiZap,
+  FiList,
+  FiWifi,
+  FiInfo,
+  FiExternalLink
+} = FiIcons;
 
 const WebhookManager = () => {
+  const navigate = useNavigate();
   const [webhooks, setWebhooks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingWebhook, setEditingWebhook] = useState(null);
   const [testingWebhook, setTestingWebhook] = useState(null);
-  const [showLogs, setShowLogs] = useState(false);
-  const [webhookLogs, setWebhookLogs] = useState([]);
-  const [loadingLogs, setLoadingLogs] = useState(false);
-  const [selectedWebhookForLogs, setSelectedWebhookForLogs] = useState(null);
-  const [retryingLogs, setRetryingLogs] = useState(new Set());
   const [testingConnectivity, setTestingConnectivity] = useState(new Set());
-  const [logFilters, setLogFilters] = useState({
-    success: 'all',
-    event: 'all',
-    dateFrom: '',
-    dateTo: ''
-  });
 
   // Form state
   const [formData, setFormData] = useState({
@@ -65,88 +73,15 @@ const WebhookManager = () => {
     }
   };
 
-  const fetchWebhookLogs = async (webhookId) => {
-    setLoadingLogs(true);
-    setSelectedWebhookForLogs(webhookId);
-
-    try {
-      let query = supabase
-        .from('webhook_logs_r2x4')
-        .select('*')
-        .order('sent_at', { ascending: false })
-        .limit(50);
-
-      if (webhookId) {
-        query = query.eq('webhook_id', webhookId);
-      }
-
-      // Aplicar filtros
-      if (logFilters.success !== 'all') {
-        query = query.eq('success', logFilters.success === 'success');
-      }
-      if (logFilters.event !== 'all') {
-        query = query.eq('event', logFilters.event);
-      }
-      if (logFilters.dateFrom) {
-        query = query.gte('sent_at', logFilters.dateFrom);
-      }
-      if (logFilters.dateTo) {
-        query = query.lte('sent_at', logFilters.dateTo + 'T23:59:59');
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-
-      setWebhookLogs(data || []);
-      setShowLogs(true);
-    } catch (err) {
-      console.error('Error fetching webhook logs:', err);
-      alert('Error al cargar los logs del webhook');
-    } finally {
-      setLoadingLogs(false);
-    }
-  };
-
-  const handleRetryWebhook = async (logId) => {
-    setRetryingLogs(prev => new Set([...prev, logId]));
-
-    try {
-      const result = await WebhookService.manualRetry(logId);
-      if (result.success) {
-        alert('Reintento de webhook iniciado correctamente');
-        // Refrescar logs después de un breve delay
-        setTimeout(() => {
-          if (selectedWebhookForLogs) {
-            fetchWebhookLogs(selectedWebhookForLogs);
-          }
-        }, 2000);
-      } else {
-        alert(`Error al reintentar webhook: ${result.message}`);
-      }
-    } catch (error) {
-      console.error('Error retrying webhook:', error);
-      alert('Error al reintentar el webhook');
-    } finally {
-      setRetryingLogs(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(logId);
-        return newSet;
-      });
-    }
-  };
-
   const testConnectivity = async (webhook) => {
     setTestingConnectivity(prev => new Set([...prev, webhook.id]));
-
     try {
       const result = await WebhookService.testConnectivity(webhook.url);
-      
       if (result.success) {
         alert(`✅ Conectividad exitosa!\n\nMétodo: ${result.method}\nStatus: ${result.status}\nResponse: ${result.statusText || 'OK'}\n\n✅ La URL está funcionando correctamente.`);
       } else {
         let errorMsg = `❌ Error de conectividad:\n\n`;
         errorMsg += `Método probado: ${result.method || 'unknown'}\n`;
-        
         if (result.type === 'TypeError' || result.error?.includes('fetch')) {
           errorMsg += `Tipo: Error de red/CORS\n\n`;
           errorMsg += `💡 Soluciones posibles:\n`;
@@ -174,7 +109,6 @@ const WebhookManager = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-
     try {
       const webhookData = {
         ...formData,
@@ -187,13 +121,11 @@ const WebhookManager = () => {
           .from('webhooks_r2x4')
           .update(webhookData)
           .eq('id', editingWebhook.id);
-
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from('webhooks_r2x4')
           .insert([webhookData]);
-
         if (error) throw error;
       }
 
@@ -251,7 +183,6 @@ const WebhookManager = () => {
         .from('webhooks_r2x4')
         .delete()
         .eq('id', webhookId);
-
       if (error) throw error;
 
       await fetchWebhooks();
@@ -268,7 +199,6 @@ const WebhookManager = () => {
         .from('webhooks_r2x4')
         .update({ enabled: !webhook.enabled })
         .eq('id', webhook.id);
-
       if (error) throw error;
 
       await fetchWebhooks();
@@ -280,7 +210,6 @@ const WebhookManager = () => {
 
   const testWebhook = async (webhook) => {
     setTestingWebhook(webhook.id);
-
     try {
       // Validar URL antes de enviar
       if (!webhook.url || !webhook.url.startsWith('http')) {
@@ -288,7 +217,6 @@ const WebhookManager = () => {
       }
 
       const result = await WebhookService.testWebhookComplete(webhook);
-      
       if (result.success) {
         alert(`✅ Webhook de prueba enviado correctamente!\n\nMétodo: ${result.method}\nMensaje: ${result.message}\n\n✅ Revisa tu integración en Albato para ver los datos recibidos.`);
       } else {
@@ -296,7 +224,6 @@ const WebhookManager = () => {
       }
     } catch (err) {
       console.error('Error testing webhook:', err);
-      
       let errorMessage = '❌ Error al probar el webhook:\n\n';
       if (err.name === 'AbortError') {
         errorMessage += 'Timeout - El webhook tardó demasiado en responder\n\n';
@@ -308,7 +235,6 @@ const WebhookManager = () => {
       } else {
         errorMessage += err.message;
       }
-      
       alert(errorMessage);
     } finally {
       setTestingWebhook(null);
@@ -340,19 +266,12 @@ const WebhookManager = () => {
     });
   };
 
-  const getStatusBadge = (log) => {
-    if (log.success) {
-      return <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">Éxito</span>;
+  const viewWebhookLogs = (webhookId = null) => {
+    if (webhookId) {
+      navigate(`/webhook-logs?webhook_id=${webhookId}`);
     } else {
-      return <span className="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">Error</span>;
+      navigate('/webhook-logs');
     }
-  };
-
-  const getRetryBadge = (retryCount) => {
-    if (retryCount > 0) {
-      return <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">Reintento {retryCount}</span>;
-    }
-    return null;
   };
 
   if (loading && webhooks.length === 0) {
@@ -380,11 +299,11 @@ const WebhookManager = () => {
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            onClick={() => fetchWebhookLogs(null)}
+            onClick={() => viewWebhookLogs()}
             className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
           >
             <SafeIcon icon={FiList} className="text-lg" />
-            Ver Todos los Logs
+            Ver Historial Completo
           </motion.button>
           <motion.button
             whileHover={{ scale: 1.05 }}
@@ -416,8 +335,7 @@ const WebhookManager = () => {
           <div>
             <h3 className="font-semibold text-blue-900 mb-2">Importante: Sobre Errores de CORS</h3>
             <p className="text-blue-800 text-sm mb-3">
-              Los errores de CORS (Cross-Origin Resource Sharing) son normales cuando se prueban webhooks desde el navegador. 
-              Esto no afecta el funcionamiento real de los webhooks cuando se envían desde el servidor.
+              Los errores de CORS (Cross-Origin Resource Sharing) son normales cuando se prueban webhooks desde el navegador. Esto no afecta el funcionamiento real de los webhooks cuando se envían desde el servidor.
             </p>
             <div className="bg-blue-100 rounded-lg p-4 mb-4">
               <p className="text-blue-800 text-sm font-medium mb-2">¿Qué significa esto?</p>
@@ -448,8 +366,7 @@ const WebhookManager = () => {
           <div>
             <h3 className="font-semibold text-green-900 mb-2">Integración con Albato y GoHighLevel</h3>
             <p className="text-green-800 text-sm mb-3">
-              Los webhooks configurados aquí se dispararán automáticamente cuando se envíen formularios de reclamo. 
-              Usa Albato como integrador para conectar con GoHighLevel u otros sistemas CRM.
+              Los webhooks configurados aquí se dispararán automáticamente cuando se envíen formularios de reclamo. Usa Albato como integrador para conectar con GoHighLevel u otros sistemas CRM.
             </p>
             <div className="bg-green-100 rounded-lg p-4 mb-4">
               <p className="text-green-800 text-sm font-medium mb-2">Configuración recomendada para Albato:</p>
@@ -509,6 +426,7 @@ const WebhookManager = () => {
                   required
                 />
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   URL del Webhook *
@@ -656,8 +574,8 @@ const WebhookManager = () => {
                 whileHover={{ scale: loading ? 1 : 1.05 }}
                 whileTap={{ scale: loading ? 1 : 0.95 }}
                 className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
-                  loading
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  loading 
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
                     : 'bg-[#204499] hover:bg-blue-700 text-white'
                 }`}
               >
@@ -670,171 +588,6 @@ const WebhookManager = () => {
               </motion.button>
             </div>
           </form>
-        </motion.div>
-      )}
-
-      {/* Webhook Logs Modal */}
-      {showLogs && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-        >
-          <div className="bg-white rounded-lg w-full max-w-6xl max-h-[80vh] overflow-auto">
-            <div className="p-4 border-b flex justify-between items-center sticky top-0 bg-white">
-              <h3 className="font-medium text-lg">
-                Historial de Envíos de Webhook
-                {selectedWebhookForLogs && (
-                  <span className="text-sm text-gray-500 ml-2">
-                    ({webhooks.find(w => w.id === selectedWebhookForLogs)?.name})
-                  </span>
-                )}
-              </h3>
-              <button
-                onClick={() => setShowLogs(false)}
-                className="text-gray-400 hover:text-gray-600 text-2xl"
-              >
-                ×
-              </button>
-            </div>
-
-            {/* Filtros */}
-            <div className="p-4 border-b bg-gray-50">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <select
-                  value={logFilters.success}
-                  onChange={(e) => setLogFilters(prev => ({ ...prev, success: e.target.value }))}
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                >
-                  <option value="all">Todos los estados</option>
-                  <option value="success">Solo éxitos</option>
-                  <option value="error">Solo errores</option>
-                </select>
-                <select
-                  value={logFilters.event}
-                  onChange={(e) => setLogFilters(prev => ({ ...prev, event: e.target.value }))}
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                >
-                  <option value="all">Todos los eventos</option>
-                  {availableEvents.map(event => (
-                    <option key={event.id} value={event.id}>{event.name}</option>
-                  ))}
-                  <option value="test_webhook">Webhook de Prueba</option>
-                </select>
-                <input
-                  type="date"
-                  value={logFilters.dateFrom}
-                  onChange={(e) => setLogFilters(prev => ({ ...prev, dateFrom: e.target.value }))}
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  placeholder="Fecha desde"
-                />
-                <input
-                  type="date"
-                  value={logFilters.dateTo}
-                  onChange={(e) => setLogFilters(prev => ({ ...prev, dateTo: e.target.value }))}
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  placeholder="Fecha hasta"
-                />
-              </div>
-              <div className="flex justify-between items-center mt-4">
-                <button
-                  onClick={() => setLogFilters({ success: 'all', event: 'all', dateFrom: '', dateTo: '' })}
-                  className="text-sm text-gray-600 hover:text-gray-800"
-                >
-                  Limpiar filtros
-                </button>
-                <button
-                  onClick={() => fetchWebhookLogs(selectedWebhookForLogs)}
-                  className="bg-[#204499] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2"
-                >
-                  <SafeIcon icon={FiFilter} className="text-sm" />
-                  Aplicar Filtros
-                </button>
-              </div>
-            </div>
-
-            <div className="p-4">
-              {loadingLogs ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="animate-spin w-8 h-8 border-4 border-[#204499] border-t-transparent rounded-full"></div>
-                </div>
-              ) : webhookLogs.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <SafeIcon icon={FiClock} className="text-4xl mx-auto mb-4 text-gray-300" />
-                  <p className="text-lg font-medium mb-2">No hay registros de envíos</p>
-                  <p className="text-sm">No se encontraron logs con los filtros aplicados</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {webhookLogs.map(log => (
-                    <div
-                      key={log.id}
-                      className={`border rounded-lg p-4 ${
-                        log.success ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <SafeIcon
-                            icon={log.success ? FiCheck : FiX}
-                            className={`${log.success ? 'text-green-600' : 'text-red-600'} text-lg`}
-                          />
-                          <span className={`font-medium ${log.success ? 'text-green-800' : 'text-red-800'}`}>
-                            {log.event}
-                          </span>
-                          {getStatusBadge(log)}
-                          {getRetryBadge(log.retry_count)}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-500">
-                            {new Date(log.sent_at).toLocaleString()}
-                          </span>
-                          {!log.success && (
-                            <motion.button
-                              whileHover={{ scale: 1.05 }}
-                              whileTap={{ scale: 0.95 }}
-                              onClick={() => handleRetryWebhook(log.id)}
-                              disabled={retryingLogs.has(log.id)}
-                              className={`p-1 rounded transition-colors ${
-                                retryingLogs.has(log.id)
-                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                  : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
-                              }`}
-                              title="Reintentar webhook"
-                            >
-                              {retryingLogs.has(log.id) ? (
-                                <div className="animate-spin w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full" />
-                              ) : (
-                                <SafeIcon icon={FiRefreshCw} className="text-sm" />
-                              )}
-                            </motion.button>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-2 mb-2">
-                        <span className="px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded-full">
-                          Status: {log.status_code}
-                        </span>
-                        {!selectedWebhookForLogs && (
-                          <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                            {webhooks.find(w => w.id === log.webhook_id)?.name || 'Webhook eliminado'}
-                          </span>
-                        )}
-                      </div>
-                      {log.response_body && (
-                        <div className="mt-2">
-                          <div className="font-medium text-sm text-gray-700 mb-1">Respuesta:</div>
-                          <pre className="bg-gray-800 text-white p-3 rounded-md text-xs overflow-x-auto">
-                            {log.response_body}
-                          </pre>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
         </motion.div>
       )}
 
@@ -863,18 +616,16 @@ const WebhookManager = () => {
                           webhook.enabled ? 'text-green-600' : 'text-gray-400'
                         }`}
                       >
-                        <SafeIcon
-                          icon={webhook.enabled ? FiToggleRight : FiToggleLeft}
-                          className="text-2xl"
+                        <SafeIcon 
+                          icon={webhook.enabled ? FiToggleRight : FiToggleLeft} 
+                          className="text-2xl" 
                         />
                       </button>
-                      <span
-                        className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          webhook.enabled
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-gray-100 text-gray-600'
-                        }`}
-                      >
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                        webhook.enabled 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-gray-100 text-gray-600'
+                      }`}>
                         {webhook.enabled ? 'Activo' : 'Inactivo'}
                       </span>
                       {WebhookService.isAlbatoUrl(webhook.url) && (
@@ -891,10 +642,7 @@ const WebhookManager = () => {
                       {webhook.trigger_events?.map(event => {
                         const eventInfo = availableEvents.find(e => e.id === event);
                         return (
-                          <span
-                            key={event}
-                            className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
-                          >
+                          <span key={event} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
                             {eventInfo?.name || event}
                           </span>
                         );
@@ -908,7 +656,7 @@ const WebhookManager = () => {
                     <motion.button
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      onClick={() => fetchWebhookLogs(webhook.id)}
+                      onClick={() => viewWebhookLogs(webhook.id)}
                       className="p-2 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-lg transition-colors"
                       title="Ver logs"
                     >
