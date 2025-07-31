@@ -81,30 +81,49 @@ export class WebhookService {
     try {
       console.log(`📡 Sending webhook to: ${webhook.name} (${webhook.url})`);
 
-      // Parsear headers de manera segura
+      // Headers básicos y compatibles con Albato
       let headers = {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'User-Agent': 'Fortex-Webhook/1.0',
-        'X-Webhook-Event': payload.event || 'unknown',
-        'X-Webhook-Timestamp': payload.timestamp || new Date().toISOString(),
-        'X-Webhook-Source': 'fortex-claims-portal'
+        'Accept': 'application/json'
       };
-
-      try {
-        const customHeaders = webhook.headers ? JSON.parse(webhook.headers) : {};
-        headers = { ...headers, ...customHeaders };
-      } catch (e) {
-        console.warn('⚠️ Invalid headers JSON, using default headers:', e);
-      }
 
       // Añadir headers específicos para Albato
       if (this.isAlbatoUrl(webhook.url)) {
-        headers['X-Requested-With'] = 'XMLHttpRequest';
-        headers['Cache-Control'] = 'no-cache';
-        headers['Accept-Encoding'] = 'gzip, deflate';
-        headers['Origin'] = 'https://fortex.com';
-        console.log('🔗 Added Albato-specific headers');
+        headers = {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'User-Agent': 'Fortex-Webhook/1.0'
+        };
+        console.log('🔗 Using Albato-compatible headers');
+      } else {
+        // Para URLs que no son de Albato, podemos usar headers adicionales
+        headers = {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'User-Agent': 'Fortex-Webhook/1.0',
+          'X-Webhook-Event': payload.event || 'unknown',
+          'X-Webhook-Source': 'fortex-claims-portal'
+        };
+      }
+
+      // Parsear headers personalizados de manera segura
+      try {
+        const customHeaders = webhook.headers ? JSON.parse(webhook.headers) : {};
+        
+        // Solo añadir headers personalizados si no es Albato
+        if (!this.isAlbatoUrl(webhook.url)) {
+          headers = { ...headers, ...customHeaders };
+        } else {
+          // Para Albato, solo permitir headers básicos
+          const allowedHeaders = ['Content-Type', 'Accept', 'User-Agent', 'Authorization'];
+          Object.keys(customHeaders).forEach(key => {
+            if (allowedHeaders.includes(key)) {
+              headers[key] = customHeaders[key];
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('⚠️ Invalid headers JSON, using default headers:', e);
       }
 
       // Crear un controlador de aborto para el timeout
@@ -114,6 +133,7 @@ export class WebhookService {
       }, 30000); // 30 segundos de timeout
 
       console.log('📤 Making HTTP request...');
+      console.log('📋 Headers being sent:', JSON.stringify(headers, null, 2));
 
       // Enviar la petición
       const response = await fetch(webhook.url, {
@@ -177,23 +197,29 @@ export class WebhookService {
         }
       };
 
-      // Headers básicos
+      // Headers básicos y compatibles
       let headers = {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'User-Agent': 'Fortex-Webhook-Test/1.0',
-        'X-Test-Request': 'true',
-        'X-Webhook-Source': 'fortex-claims-portal'
+        'Accept': 'application/json'
       };
 
       // Añadir headers específicos para Albato
       const isAlbato = this.isAlbatoUrl(url);
       if (isAlbato) {
-        headers['X-Requested-With'] = 'XMLHttpRequest';
-        headers['Cache-Control'] = 'no-cache';
-        headers['Accept-Encoding'] = 'gzip, deflate';
-        headers['Origin'] = 'https://fortex.com';
-        console.log('🔗 Added Albato-specific headers');
+        headers = {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'User-Agent': 'Fortex-Webhook-Test/1.0'
+        };
+        console.log('🔗 Using Albato-compatible headers for test');
+      } else {
+        headers = {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'User-Agent': 'Fortex-Webhook-Test/1.0',
+          'X-Test-Request': 'true',
+          'X-Webhook-Source': 'fortex-claims-portal'
+        };
       }
 
       // Crear un controlador de aborto para el timeout
