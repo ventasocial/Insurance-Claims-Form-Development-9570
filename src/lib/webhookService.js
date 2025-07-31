@@ -40,7 +40,7 @@ export class WebhookService {
         data: data
       };
 
-      console.log('📤 Final payload:', JSON.stringify(payload, null, 2));
+      console.log('📤 Final payload being sent:', JSON.stringify(payload, null, 2));
 
       // Disparar cada webhook directamente (sin Edge Functions)
       const webhookPromises = webhooks.map(webhook => 
@@ -80,6 +80,7 @@ export class WebhookService {
   static async sendWebhook(webhook, payload) {
     try {
       console.log(`📡 Sending webhook to: ${webhook.name} (${webhook.url})`);
+      console.log(`📋 Payload being sent:`, JSON.stringify(payload, null, 2));
 
       // Headers básicos y compatibles con Albato
       let headers = {
@@ -152,27 +153,36 @@ export class WebhookService {
 
       console.log(`📥 Response received: ${statusCode} - ${responseText.substring(0, 200)}`);
 
-      // Registrar el resultado del webhook
-      await this.logWebhookResult(
-        webhook.id,
-        payload,
-        success,
-        statusCode,
-        responseText
-      );
+      // Registrar el resultado del webhook con manejo de errores mejorado
+      try {
+        await this.logWebhookResult(
+          webhook.id,
+          payload,
+          success,
+          statusCode,
+          responseText
+        );
+      } catch (logError) {
+        console.error('💥 Error logging webhook result (but webhook was sent):', logError);
+        // No lanzar error aquí para no afectar el envío principal
+      }
 
       return { success, statusCode, responseText };
     } catch (error) {
       console.error(`💥 Error sending webhook to ${webhook.name}:`, error);
 
-      // Registrar el error
-      await this.logWebhookResult(
-        webhook.id,
-        payload,
-        false,
-        error.name === 'AbortError' ? 408 : 0,
-        error.message
-      );
+      // Registrar el error con manejo de errores mejorado
+      try {
+        await this.logWebhookResult(
+          webhook.id,
+          payload,
+          false,
+          error.name === 'AbortError' ? 408 : 0,
+          error.message
+        );
+      } catch (logError) {
+        console.error('💥 Error logging webhook error:', logError);
+      }
 
       throw error;
     }
@@ -414,16 +424,26 @@ export class WebhookService {
    */
   static async logWebhookResult(webhookId, payload, success, statusCode, responseBody) {
     try {
+      // Preparar datos de log con validación
       const logData = {
         webhook_id: webhookId,
-        event: payload.event,
-        status_code: statusCode,
-        success: success,
-        response_body: responseBody || '',
-        payload: JSON.stringify(payload),
+        event: payload.event || 'unknown',
+        status_code: statusCode || 0,
+        success: success === true, // Asegurar que sea boolean
+        response_body: responseBody ? responseBody.substring(0, 5000) : '', // Limitar tamaño
+        payload: JSON.stringify(payload).substring(0, 10000), // Limitar tamaño del payload
         sent_at: new Date().toISOString(),
         retry_count: payload.retry_count || 0
       };
+
+      console.log('📝 Attempting to log webhook result:', {
+        webhook_id: logData.webhook_id,
+        event: logData.event,
+        success: logData.success,
+        status_code: logData.status_code,
+        payload_size: logData.payload.length,
+        response_size: logData.response_body.length
+      });
 
       const { error } = await supabase
         .from('webhook_logs_r2x4')
@@ -431,11 +451,40 @@ export class WebhookService {
 
       if (error) {
         console.error('💥 Error logging webhook result:', error);
+        console.error('💥 Error details:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        });
+        
+        // Intentar con datos simplificados si hay error
+        const simplifiedLogData = {
+          webhook_id: webhookId,
+          event: payload.event || 'unknown',
+          status_code: statusCode || 0,
+          success: success === true,
+          response_body: responseBody ? 'Response received' : 'No response',
+          payload: JSON.stringify({ event: payload.event, timestamp: payload.timestamp }),
+          sent_at: new Date().toISOString(),
+          retry_count: 0
+        };
+
+        console.log('🔄 Retrying with simplified data...');
+        const { error: retryError } = await supabase
+          .from('webhook_logs_r2x4')
+          .insert([simplifiedLogData]);
+
+        if (retryError) {
+          console.error('💥 Failed to log even simplified data:', retryError);
+        } else {
+          console.log('✅ Logged simplified webhook result');
+        }
       } else {
         console.log(`📝 Logged webhook result: ${success ? 'SUCCESS' : 'FAILED'} (${statusCode})`);
       }
     } catch (error) {
-      console.error('💥 Error logging webhook result:', error);
+      console.error('💥 Error in logWebhookResult function:', error);
     }
   }
 
@@ -564,7 +613,7 @@ export class WebhookService {
       }
     };
 
-    console.log('✅ Transformed data:', transformedData);
+    console.log('✅ Transformed data for webhook:', transformedData);
     return transformedData;
   }
 
