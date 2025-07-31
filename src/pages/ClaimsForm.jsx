@@ -17,7 +17,7 @@ import Breadcrumb from '../components/Breadcrumb';
 import FormHeader from '../components/FormHeader';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
-import supabase from '../lib/supabase';
+import supabase, { ensureBucketExists } from '../lib/supabase';
 import { getFormDataFromMagicLink, updateMagicLinkFormData } from '../lib/magicLink';
 import WebhookService from '../lib/webhookService';
 
@@ -489,42 +489,6 @@ const ClaimsForm = () => {
   const prevStep = () => {
     if (currentStep > 0) {
       setCurrentStep(currentStep - 1);
-    }
-  };
-
-  // Función para crear el bucket si no existe
-  const ensureBucketExists = async () => {
-    try {
-      // Verificar si el bucket existe
-      const { data, error } = await supabase.storage.getBucket('claims');
-      
-      if (error && error.message.includes('not found')) {
-        console.log('📦 Creating claims bucket...');
-        
-        // Crear el bucket si no existe
-        const { error: createError } = await supabase.storage.createBucket('claims', {
-          public: true, // Hacer el bucket público para poder acceder a los archivos
-          allowedMimeTypes: ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'],
-          fileSizeLimit: 10485760 // 10MB
-        });
-
-        if (createError) {
-          console.error('❌ Error creating bucket:', createError);
-          throw createError;
-        }
-
-        console.log('✅ Claims bucket created successfully');
-        return true;
-      } else if (error) {
-        console.error('❌ Error checking bucket:', error);
-        throw error;
-      }
-
-      console.log('✅ Claims bucket already exists');
-      return true;
-    } catch (error) {
-      console.error('💥 Error ensuring bucket exists:', error);
-      throw error;
     }
   };
 

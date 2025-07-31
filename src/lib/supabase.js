@@ -15,4 +15,46 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   }
 });
 
+// Función para crear el bucket si no existe
+export const ensureBucketExists = async () => {
+  try {
+    console.log('🔍 Checking if bucket exists...');
+    
+    // Verificar si el bucket existe
+    const { data: buckets, error: listError } = await supabase.storage.listBuckets();
+    
+    if (listError) {
+      console.error('❌ Error listing buckets:', listError);
+      throw listError;
+    }
+
+    const bucketExists = buckets.some(bucket => bucket.name === 'claims');
+    
+    if (bucketExists) {
+      console.log('✅ Bucket "claims" already exists');
+      return true;
+    }
+
+    console.log('📦 Creating claims bucket...');
+    
+    // Crear el bucket si no existe
+    const { error: createError } = await supabase.storage.createBucket('claims', {
+      public: true, // Hacer el bucket público para poder acceder a los archivos
+      allowedMimeTypes: ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'],
+      fileSizeLimit: 10485760 // 10MB
+    });
+
+    if (createError) {
+      console.error('❌ Error creating bucket:', createError);
+      throw createError;
+    }
+
+    console.log('✅ Claims bucket created successfully');
+    return true;
+  } catch (error) {
+    console.error('💥 Error ensuring bucket exists:', error);
+    throw error;
+  }
+};
+
 export default supabase;

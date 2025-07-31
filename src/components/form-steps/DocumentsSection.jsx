@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import SafeIcon from '../../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
-import supabase from '../../lib/supabase';
+import { ensureBucketExists } from '../../lib/supabase';
 
 const { FiUpload, FiFile, FiTrash2, FiEye, FiPaperclip, FiAlertCircle, FiCheckCircle } = FiIcons;
 
@@ -16,31 +16,18 @@ const DocumentsSection = ({ formData, updateFormData }) => {
   const [uploadProgress, setUploadProgress] = useState({});
 
   useEffect(() => {
-    // Crear el bucket 'claims' si no existe
-    const createBucketIfNotExists = async () => {
+    // Asegurar que el bucket existe cuando se carga el componente
+    const initializeBucket = async () => {
       try {
-        const { data, error } = await supabase.storage.getBucket('claims');
-        
-        if (error && error.message.includes('not found')) {
-          // Bucket not found, create it
-          const { error: createError } = await supabase.storage.createBucket('claims', {
-            public: true, // Hacer el bucket público para poder acceder a los archivos
-            allowedMimeTypes: ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'],
-            fileSizeLimit: 10485760 // 10MB
-          });
-
-          if (createError) {
-            console.error('Error creating bucket:', createError);
-          } else {
-            console.log('Bucket "claims" created successfully');
-          }
-        }
+        await ensureBucketExists();
+        console.log('✅ Bucket verified/created successfully');
       } catch (err) {
-        console.error('Error checking bucket:', err);
+        console.error('❌ Error ensuring bucket exists:', err);
+        setUploadError('Error al configurar el almacenamiento. Por favor recarga la página.');
       }
     };
 
-    createBucketIfNotExists();
+    initializeBucket();
   }, []);
 
   const handleFileUpload = async (documentType, files) => {
