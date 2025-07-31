@@ -42,7 +42,7 @@ export class WebhookService {
 
       console.log('📤 Final payload:', JSON.stringify(payload, null, 2));
 
-      // Disparar cada webhook directamente
+      // Disparar cada webhook directamente (sin Edge Functions)
       const webhookPromises = webhooks.map(webhook => 
         this.sendWebhook(webhook, payload)
       );
@@ -114,7 +114,7 @@ export class WebhookService {
       }, 30000); // 30 segundos de timeout
 
       console.log('📤 Making HTTP request...');
-      
+
       // Enviar la petición
       const response = await fetch(webhook.url, {
         method: 'POST',
@@ -124,12 +124,12 @@ export class WebhookService {
       });
 
       clearTimeout(timeoutId);
-      
+
       // Procesar la respuesta
       const responseText = await response.text();
       const success = response.ok;
       const statusCode = response.status;
-      
+
       console.log(`📥 Response received: ${statusCode} - ${responseText.substring(0, 200)}`);
 
       // Registrar el resultado del webhook
@@ -141,14 +141,10 @@ export class WebhookService {
         responseText
       );
 
-      return {
-        success,
-        statusCode,
-        responseText
-      };
+      return { success, statusCode, responseText };
     } catch (error) {
       console.error(`💥 Error sending webhook to ${webhook.name}:`, error);
-      
+
       // Registrar el error
       await this.logWebhookResult(
         webhook.id,
@@ -157,7 +153,7 @@ export class WebhookService {
         error.name === 'AbortError' ? 408 : 0,
         error.message
       );
-      
+
       throw error;
     }
   }
@@ -169,7 +165,7 @@ export class WebhookService {
   static async testConnectivity(url) {
     try {
       console.log(`🔍 Testing connectivity to: ${url}`);
-      
+
       // Payload de prueba simple
       const testPayload = {
         event: 'connectivity_test',
@@ -215,12 +211,12 @@ export class WebhookService {
       });
 
       clearTimeout(timeoutId);
-      
+
       // Procesar la respuesta
       const responseText = await response.text();
       const success = response.ok;
       const statusCode = response.status;
-      
+
       return {
         success,
         status: statusCode,
@@ -230,7 +226,6 @@ export class WebhookService {
       };
     } catch (error) {
       console.error('💥 Connectivity test failed:', error);
-      
       return {
         success: false,
         error: error.message,
@@ -247,7 +242,7 @@ export class WebhookService {
   static async testWebhookComplete(webhook) {
     try {
       console.log(`🧪 Testing webhook: ${webhook.name} (${webhook.url})`);
-      
+
       // Datos de prueba que simularían un reclamo real
       const testData = {
         submission_id: 'test-' + Date.now(),
@@ -314,7 +309,7 @@ export class WebhookService {
 
       // Enviar el webhook de prueba
       const result = await this.sendWebhook(webhook, payload);
-      
+
       return {
         success: result.success,
         message: `Test completado con status ${result.statusCode}`,
@@ -322,7 +317,6 @@ export class WebhookService {
       };
     } catch (error) {
       console.error('💥 Complete webhook test failed:', error);
-      
       return {
         success: false,
         error: error.message,
@@ -377,16 +371,10 @@ export class WebhookService {
       // Enviar el webhook
       await this.sendWebhook(webhook, payload);
 
-      return {
-        success: true,
-        message: 'Webhook retry initiated'
-      };
+      return { success: true, message: 'Webhook retry initiated' };
     } catch (error) {
       console.error('Error in manual retry:', error);
-      return {
-        success: false,
-        message: error.message
-      };
+      return { success: false, message: error.message };
     }
   }
 
@@ -584,7 +572,6 @@ export class WebhookService {
         count += docArray.length;
       }
     });
-
     return count;
   }
 }
