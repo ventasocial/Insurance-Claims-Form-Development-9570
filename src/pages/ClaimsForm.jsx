@@ -95,6 +95,7 @@ const ClaimsForm = () => {
     // Logic to determine the appropriate step based on form completion
     if (!data.insuranceCompany) return 0;
     if (!data.claimType) return 1;
+
     if (data.claimType === 'reembolso') {
       if (!data.reimbursementType) return 2;
       if (!data.serviceTypes || data.serviceTypes.length === 0) return 3;
@@ -111,6 +112,7 @@ const ClaimsForm = () => {
       const contactInfo = data.contactInfo || {};
       if (!contactInfo.nombres) return 4;
     }
+
     // Default to the first step if we can't determine
     return 0;
   };
@@ -185,25 +187,22 @@ const ClaimsForm = () => {
       case 'claimType':
         return formData.claimType;
       case 'reimbursement':
-        return formData.reimbursementType && 
-               (formData.reimbursementType === 'inicial' || formData.claimNumber);
+        return formData.reimbursementType && (formData.reimbursementType === 'inicial' || formData.claimNumber);
       case 'services':
         return formData.serviceTypes.length > 0;
       case 'programming':
-        return formData.programmingService && 
-               (formData.programmingService !== 'cirugia' || 
-                formData.insuranceCompany !== 'gnp' || 
-                formData.isCirugiaOrtopedica !== undefined);
+        return formData.programmingService && (formData.programmingService !== 'cirugia' || formData.insuranceCompany !== 'gnp' || formData.isCirugiaOrtopedica !== undefined);
       case 'checklist':
         // Verificar que al menos los documentos requeridos estén marcados y se haya seleccionado una opción de firma
         const requiredDocs = getRequiredDocuments();
         // Si la opción de firma es por email, no verificar los documentos que requieren firma
-        const docsToCheck = formData.signatureDocumentOption === 'email' 
-          ? requiredDocs.filter(doc => !doc.needsSignature) 
+        const docsToCheck = formData.signatureDocumentOption === 'email'
+          ? requiredDocs.filter(doc => !doc.needsSignature)
           : requiredDocs;
+
         return docsToCheck.every(doc => formData.documentChecklist && formData.documentChecklist[doc.id]) &&
-               formData.signatureDocumentOption !== undefined && 
-               formData.signatureDocumentOption !== '';
+          formData.signatureDocumentOption !== undefined &&
+          formData.signatureDocumentOption !== '';
       case 'persons':
         // Verificar que la información de contacto esté completa
         const contactInfo = formData.contactInfo;
@@ -252,8 +251,7 @@ const ClaimsForm = () => {
             cuentaValid = cuentaValid && cuentaPhoneValid;
           }
 
-          return contactValid && titularValid && titularPhoneValid && 
-                 afectadoValid && afectadoPhoneValid && cuentaValid;
+          return contactValid && titularValid && titularPhoneValid && afectadoValid && afectadoPhoneValid && cuentaValid;
         }
 
         // Si se eligió descarga física, solo verificar contactInfo
@@ -494,12 +492,51 @@ const ClaimsForm = () => {
     }
   };
 
+  // Función para crear el bucket si no existe
+  const ensureBucketExists = async () => {
+    try {
+      // Verificar si el bucket existe
+      const { data, error } = await supabase.storage.getBucket('claims');
+      
+      if (error && error.message.includes('not found')) {
+        console.log('📦 Creating claims bucket...');
+        
+        // Crear el bucket si no existe
+        const { error: createError } = await supabase.storage.createBucket('claims', {
+          public: true, // Hacer el bucket público para poder acceder a los archivos
+          allowedMimeTypes: ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'],
+          fileSizeLimit: 10485760 // 10MB
+        });
+
+        if (createError) {
+          console.error('❌ Error creating bucket:', createError);
+          throw createError;
+        }
+
+        console.log('✅ Claims bucket created successfully');
+        return true;
+      } else if (error) {
+        console.error('❌ Error checking bucket:', error);
+        throw error;
+      }
+
+      console.log('✅ Claims bucket already exists');
+      return true;
+    } catch (error) {
+      console.error('💥 Error ensuring bucket exists:', error);
+      throw error;
+    }
+  };
+
   const handleSubmit = async () => {
     setSubmitting(true);
     setSubmitError(null);
 
     try {
       console.log('Iniciando envío del formulario...');
+
+      // Asegurar que el bucket existe antes de subir archivos
+      await ensureBucketExists();
 
       // Preparar los datos para enviar a Supabase
       const reclamacionData = {
@@ -549,11 +586,15 @@ const ClaimsForm = () => {
       // Primero subimos los documentos al bucket de Storage
       if (formData.documents && Object.keys(formData.documents).length > 0) {
         console.log('Subiendo documentos al storage...');
+
         for (const docType in formData.documents) {
           if (Array.isArray(formData.documents[docType])) {
             for (const doc of formData.documents[docType]) {
               if (doc.file && doc.isLocal) {
                 const filePath = `${submissionId}/${docType}/${doc.name}`;
+                
+                console.log(`📤 Uploading file: ${filePath}`);
+                
                 const { error: uploadError } = await supabase.storage
                   .from('claims')
                   .upload(filePath, doc.file, {
@@ -562,7 +603,10 @@ const ClaimsForm = () => {
                   });
 
                 if (uploadError) {
-                  console.error(`Error uploading file ${doc.name}:`, uploadError);
+                  console.error(`❌ Error uploading file ${doc.name}:`, uploadError);
+                  // No detener el proceso por errores de subida individual
+                } else {
+                  console.log(`✅ File uploaded successfully: ${doc.name}`);
                 }
               }
             }
@@ -593,11 +637,14 @@ const ClaimsForm = () => {
       });
     } catch (error) {
       console.error('Error al enviar el reclamo:', error);
+      
       // Mensaje de error más detallado para ayudar en la depuración
       let errorMessage = 'Hubo un error al enviar el formulario. Por favor intenta de nuevo.';
+      
       if (error.message) {
         errorMessage += ' Detalle: ' + error.message;
       }
+      
       setSubmitError(errorMessage);
     } finally {
       setSubmitting(false);
@@ -621,7 +668,11 @@ const ClaimsForm = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Header */}
-      <FormHeader currentStep={currentStep} totalSteps={steps.length} formData={formData} />
+      <FormHeader
+        currentStep={currentStep}
+        totalSteps={steps.length}
+        formData={formData}
+      />
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Session error message */}
@@ -643,7 +694,11 @@ const ClaimsForm = () => {
         <Breadcrumb formData={formData} />
 
         {/* Progress Bar */}
-        <FormProgress currentStep={currentStep} totalSteps={steps.length} steps={steps} />
+        <FormProgress
+          currentStep={currentStep}
+          totalSteps={steps.length}
+          steps={steps}
+        />
 
         {/* Form Content */}
         <motion.div
@@ -674,7 +729,10 @@ const ClaimsForm = () => {
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ duration: 0.3 }}
               >
-                <CurrentStepComponent formData={formData} updateFormData={updateFormData} />
+                <CurrentStepComponent
+                  formData={formData}
+                  updateFormData={updateFormData}
+                />
               </motion.div>
             )}
           </AnimatePresence>

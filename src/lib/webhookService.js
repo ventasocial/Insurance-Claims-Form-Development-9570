@@ -1,14 +1,8 @@
 import supabase from './supabase';
 
-/**
- * Servicio para manejar webhooks - Implementación directa sin Edge Functions
- */
+/** * Servicio para manejar webhooks - Implementación directa sin Edge Functions */
 export class WebhookService {
-  /**
-   * Dispara todos los webhooks activos para un evento específico
-   * @param {string} event - El evento que disparó el webhook
-   * @param {Object} data - Los datos a enviar en el webhook
-   */
+  /** * Dispara todos los webhooks activos para un evento específico * @param {string} event - El evento que disparó el webhook * @param {Object} data - Los datos a enviar en el webhook */
   static async triggerWebhooks(event, data) {
     try {
       console.log(`🚀 Triggering webhooks for event: ${event}`);
@@ -64,19 +58,12 @@ export class WebhookService {
     }
   }
 
-  /**
-   * Valida si una URL es de Albato
-   * @param {string} url - URL a validar
-   */
+  /** * Valida si una URL es de Albato * @param {string} url - URL a validar */
   static isAlbatoUrl(url) {
     return url && (url.includes('albato.com') || url.includes('h.albato.com'));
   }
 
-  /**
-   * Envía un webhook directamente
-   * @param {Object} webhook - Configuración del webhook
-   * @param {Object} payload - Datos a enviar
-   */
+  /** * Envía un webhook directamente * @param {Object} webhook - Configuración del webhook * @param {Object} payload - Datos a enviar */
   static async sendWebhook(webhook, payload) {
     try {
       console.log(`📡 Sending webhook to: ${webhook.name} (${webhook.url})`);
@@ -187,10 +174,7 @@ export class WebhookService {
     }
   }
 
-  /**
-   * Prueba la conectividad con una URL de webhook
-   * @param {string} url - URL a probar
-   */
+  /** * Prueba la conectividad con una URL de webhook * @param {string} url - URL a probar */
   static async testConnectivity(url) {
     try {
       console.log(`🔍 Testing connectivity to: ${url}`);
@@ -261,6 +245,7 @@ export class WebhookService {
       };
     } catch (error) {
       console.error('💥 Connectivity test failed:', error);
+
       return {
         success: false,
         error: error.message,
@@ -270,10 +255,7 @@ export class WebhookService {
     }
   }
 
-  /**
-   * Prueba un webhook con datos completos
-   * @param {Object} webhook - Configuración del webhook
-   */
+  /** * Prueba un webhook con datos completos * @param {Object} webhook - Configuración del webhook */
   static async testWebhookComplete(webhook) {
     try {
       console.log(`🧪 Testing webhook: ${webhook.name} (${webhook.url})`);
@@ -352,6 +334,7 @@ export class WebhookService {
       };
     } catch (error) {
       console.error('💥 Complete webhook test failed:', error);
+
       return {
         success: false,
         error: error.message,
@@ -360,10 +343,7 @@ export class WebhookService {
     }
   }
 
-  /**
-   * Reenvía manualmente un webhook fallido
-   * @param {string} logId - ID del log del webhook fallido
-   */
+  /** * Reenvía manualmente un webhook fallido * @param {string} logId - ID del log del webhook fallido */
   static async manualRetry(logId) {
     try {
       // Obtener el log del webhook fallido
@@ -413,14 +393,7 @@ export class WebhookService {
     }
   }
 
-  /**
-   * Registra el resultado de un webhook en la base de datos
-   * @param {string} webhookId - ID del webhook
-   * @param {Object} payload - Datos enviados
-   * @param {boolean} success - Si fue exitoso
-   * @param {number} statusCode - Código de estado HTTP
-   * @param {string} responseBody - Cuerpo de la respuesta
-   */
+  /** * Registra el resultado de un webhook en la base de datos * @param {string} webhookId - ID del webhook * @param {Object} payload - Datos enviados * @param {boolean} success - Si fue exitoso * @param {number} statusCode - Código de estado HTTP * @param {string} responseBody - Cuerpo de la respuesta */
   static async logWebhookResult(webhookId, payload, success, statusCode, responseBody) {
     try {
       // Preparar datos de log con validación
@@ -470,6 +443,7 @@ export class WebhookService {
         };
 
         console.log('🔄 Retrying with simplified data...');
+
         const { error: retryError } = await supabase
           .from('webhook_logs_r2x4')
           .insert([simplifiedLogData]);
@@ -487,12 +461,7 @@ export class WebhookService {
     }
   }
 
-  /**
-   * Obtiene las URLs públicas de los documentos subidos a Supabase Storage
-   * @param {string} submissionId - ID de la submisión
-   * @param {Object} documents - Objeto con documentos del formulario
-   * @returns {Promise<Object>} - Objeto con las URLs públicas de los documentos
-   */
+  /** * Obtiene las URLs públicas de los documentos subidos a Supabase Storage * @param {string} submissionId - ID de la submisión * @param {Object} documents - Objeto con documentos del formulario * @returns {Promise<Object>} - Objeto con las URLs públicas de los documentos */
   static async getDocumentPublicUrls(submissionId, documents) {
     try {
       if (!documents || Object.keys(documents).length === 0) {
@@ -513,11 +482,14 @@ export class WebhookService {
         for (const doc of documents[docType]) {
           // Si ya tenemos una URL (archivo local), construir la URL de Supabase
           if (doc.url && doc.isLocal) {
+            // Construir la URL usando la estructura correcta del bucket
+            const publicUrl = `${supabase.supabaseUrl}/storage/v1/object/public/claims/${submissionId}/${docType}/${doc.name}`;
+            
             result[docType].push({
               name: doc.name,
               type: doc.type,
               size: doc.size,
-              url: `${supabase.supabaseUrl}/storage/v1/object/public/claims/${submissionId}/${docType}/${doc.name}`
+              url: publicUrl
             });
           }
           // Si es una URL de Supabase Storage
@@ -543,11 +515,7 @@ export class WebhookService {
     }
   }
 
-  /**
-   * Transforma los datos del formulario para el webhook
-   * @param {Object} formData - Datos del formulario
-   * @param {string} submissionId - ID de la submisión
-   */
+  /** * Transforma los datos del formulario para el webhook * @param {Object} formData - Datos del formulario * @param {string} submissionId - ID de la submisión */
   static async transformFormDataForWebhook(formData, submissionId) {
     console.log('🔄 Transforming form data for webhook...');
     console.log('📋 Original form data:', formData);
@@ -557,7 +525,6 @@ export class WebhookService {
 
     const transformedData = {
       submission_id: submissionId,
-
       // Información de contacto
       contact_info: {
         nombres: formData.contactInfo?.nombres,
@@ -567,7 +534,6 @@ export class WebhookService {
         telefono: formData.contactInfo?.telefono,
         full_name: `${formData.contactInfo?.nombres || ''} ${formData.contactInfo?.apellidoPaterno || ''} ${formData.contactInfo?.apellidoMaterno || ''}`.trim()
       },
-
       // Información del reclamo
       claim_info: {
         insurance_company: formData.insuranceCompany,
@@ -578,17 +544,14 @@ export class WebhookService {
         programming_service: formData.programmingService,
         surgery_type: formData.isCirugiaOrtopedica ? 'traumatologia_ortopedia_neurologia' : 'other'
       },
-
       // Personas involucradas
       persons_involved: {
         titular_asegurado: this.transformPersonData(formData.personsInvolved?.titularAsegurado),
         asegurado_afectado: this.transformPersonData(formData.personsInvolved?.aseguradoAfectado),
         titular_cuenta: this.transformPersonData(formData.personsInvolved?.titularCuenta)
       },
-
       // Descripción del siniestro
       sinister_description: formData.sinisterDescription,
-
       // Información de documentos
       documents_info: {
         signature_option: formData.signatureDocumentOption,
@@ -596,13 +559,11 @@ export class WebhookService {
         uploaded_documents_count: this.countUploadedDocuments(formData.documents),
         document_urls: documentUrls // Incluir URLs de los documentos
       },
-
       // Términos y condiciones
       legal_acceptance: {
         accepted_terms: formData.acceptedTerms,
         accepted_privacy: formData.acceptedPrivacy
       },
-
       // Metadatos
       metadata: {
         created_at: new Date().toISOString(),
@@ -616,10 +577,7 @@ export class WebhookService {
     return transformedData;
   }
 
-  /**
-   * Transforma los datos de una persona para el webhook
-   * @param {Object} personData - Datos de la persona
-   */
+  /** * Transforma los datos de una persona para el webhook * @param {Object} personData - Datos de la persona */
   static transformPersonData(personData) {
     if (!personData) return null;
 
@@ -633,10 +591,7 @@ export class WebhookService {
     };
   }
 
-  /**
-   * Cuenta los documentos subidos
-   * @param {Object} documents - Objeto con documentos
-   */
+  /** * Cuenta los documentos subidos * @param {Object} documents - Objeto con documentos */
   static countUploadedDocuments(documents) {
     if (!documents) return 0;
 
@@ -646,6 +601,7 @@ export class WebhookService {
         count += docArray.length;
       }
     });
+
     return count;
   }
 }

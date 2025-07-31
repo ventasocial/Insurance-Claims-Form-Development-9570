@@ -1,12 +1,12 @@
-import React, {useState, useEffect} from 'react';
-import {motion} from 'framer-motion';
+import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import SafeIcon from '../../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 import supabase from '../../lib/supabase';
 
-const {FiUpload, FiFile, FiTrash2, FiEye, FiPaperclip, FiAlertCircle, FiCheckCircle} = FiIcons;
+const { FiUpload, FiFile, FiTrash2, FiEye, FiPaperclip, FiAlertCircle, FiCheckCircle } = FiIcons;
 
-const DocumentsSection = ({formData, updateFormData}) => {
+const DocumentsSection = ({ formData, updateFormData }) => {
   const [uploadedFiles, setUploadedFiles] = useState(formData.documents || {});
   const [previewFile, setPreviewFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -19,12 +19,16 @@ const DocumentsSection = ({formData, updateFormData}) => {
     // Crear el bucket 'claims' si no existe
     const createBucketIfNotExists = async () => {
       try {
-        const {data, error} = await supabase.storage.getBucket('claims');
-        if (error && error.code === 'PGRST116') {
-          // Bucket not found
-          const {error: createError} = await supabase.storage.createBucket('claims', {
+        const { data, error } = await supabase.storage.getBucket('claims');
+        
+        if (error && error.message.includes('not found')) {
+          // Bucket not found, create it
+          const { error: createError } = await supabase.storage.createBucket('claims', {
             public: true, // Hacer el bucket público para poder acceder a los archivos
+            allowedMimeTypes: ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'],
+            fileSizeLimit: 10485760 // 10MB
           });
+
           if (createError) {
             console.error('Error creating bucket:', createError);
           } else {
@@ -58,7 +62,7 @@ const DocumentsSection = ({formData, updateFormData}) => {
 
   // Store files locally for now
   const handleLocalUpload = (documentType, files) => {
-    const newFiles = {...uploadedFiles};
+    const newFiles = { ...uploadedFiles };
     if (!newFiles[documentType]) {
       newFiles[documentType] = [];
     }
@@ -98,10 +102,10 @@ const DocumentsSection = ({formData, updateFormData}) => {
   };
 
   const removeFile = async (documentType, fileIndex) => {
-    const newFiles = {...uploadedFiles};
+    const newFiles = { ...uploadedFiles };
     if (newFiles[documentType]) {
       const fileToRemove = newFiles[documentType][fileIndex];
-      
+
       // Clean up object URL to prevent memory leaks
       if (fileToRemove.url && fileToRemove.isLocal) {
         URL.revokeObjectURL(fileToRemove.url);
@@ -308,7 +312,7 @@ const DocumentsSection = ({formData, updateFormData}) => {
 
   const requirements = getDocumentRequirements();
 
-  const FileUploadArea = ({document}) => (
+  const FileUploadArea = ({ document }) => (
     <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-[#204499] transition-colors">
       <input
         type="file"
@@ -326,7 +330,7 @@ const DocumentsSection = ({formData, updateFormData}) => {
         {uploading && uploadProgress[document.id] ? (
           <div className="w-12 h-12 relative">
             <div className="absolute inset-0 rounded-full border-4 border-gray-200"></div>
-            <div 
+            <div
               className="absolute inset-0 rounded-full border-4 border-[#204499] border-t-transparent"
               style={{
                 transform: `rotate(${uploadProgress[document.id] * 3.6}deg)`,
@@ -353,7 +357,7 @@ const DocumentsSection = ({formData, updateFormData}) => {
     </div>
   );
 
-  const FileList = ({documentType}) => {
+  const FileList = ({ documentType }) => {
     const files = uploadedFiles[documentType] || [];
 
     if (files.length === 0) {
@@ -370,8 +374,8 @@ const DocumentsSection = ({formData, updateFormData}) => {
         {files.map((file, index) => (
           <motion.div
             key={index}
-            initial={{opacity: 0, y: 10}}
-            animate={{opacity: 1, y: 0}}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
             className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
           >
             <div className="flex items-center space-x-3">
@@ -406,7 +410,7 @@ const DocumentsSection = ({formData, updateFormData}) => {
     );
   };
 
-  const DocumentSection = ({title, documents, bgColor = "bg-white"}) => (
+  const DocumentSection = ({ title, documents, bgColor = "bg-white" }) => (
     <div className={`${bgColor} rounded-xl p-6 shadow-sm`}>
       <h3 className="text-xl font-semibold text-gray-900 mb-6">{title}</h3>
       <div className="space-y-8">
@@ -469,8 +473,8 @@ const DocumentsSection = ({formData, updateFormData}) => {
 
   return (
     <motion.div
-      initial={{opacity: 0, y: 20}}
-      animate={{opacity: 1, y: 0}}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
       className="space-y-8"
     >
       <div className="text-center mb-8">
@@ -484,8 +488,8 @@ const DocumentsSection = ({formData, updateFormData}) => {
 
       {uploadError && (
         <motion.div
-          initial={{opacity: 0, y: -10}}
-          animate={{opacity: 1, y: 0}}
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
           className="bg-red-50 text-red-800 p-4 rounded-lg mb-6"
         >
           <div className="font-medium">Error al subir documentos:</div>
@@ -496,8 +500,8 @@ const DocumentsSection = ({formData, updateFormData}) => {
       {/* Mostrar información sobre firma digital si está seleccionada */}
       {formData.signatureDocumentOption === 'email' && (
         <motion.div
-          initial={{opacity: 0, y: -10}}
-          animate={{opacity: 1, y: 0}}
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
           className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6"
         >
           <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
@@ -505,7 +509,7 @@ const DocumentsSection = ({formData, updateFormData}) => {
             Documentos de Firma Digital
           </h3>
           <p className="text-gray-700">
-            Has seleccionado recibir los documentos de la aseguradora por email para firma digital. 
+            Has seleccionado recibir los documentos de la aseguradora por email para firma digital.
             Estos documentos se enviarán directamente a las personas correspondientes y no necesitas subirlos aquí.
           </p>
         </motion.div>
@@ -549,8 +553,8 @@ const DocumentsSection = ({formData, updateFormData}) => {
       {/* Mensaje si faltan documentos requeridos */}
       {!areAllRequiredDocsUploaded() && (
         <motion.div
-          initial={{opacity: 0, y: 10}}
-          animate={{opacity: 1, y: 0}}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
           className="bg-amber-50 border border-amber-200 rounded-lg p-4"
         >
           <div className="flex items-center gap-2">
@@ -565,8 +569,8 @@ const DocumentsSection = ({formData, updateFormData}) => {
       {/* Mensaje si todos los documentos están cargados */}
       {areAllRequiredDocsUploaded() && (
         <motion.div
-          initial={{opacity: 0, y: 10}}
-          animate={{opacity: 1, y: 0}}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
           className="bg-green-50 border border-green-200 rounded-lg p-4"
         >
           <div className="flex items-center gap-2">
@@ -581,12 +585,12 @@ const DocumentsSection = ({formData, updateFormData}) => {
       {/* File Preview Modal - Mejorado para PDFs */}
       {previewFile && (
         <motion.div
-          initial={{opacity: 0}}
-          animate={{opacity: 1}}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
           onClick={() => setPreviewFile(null)}
         >
-          <div 
+          <div
             className="bg-white rounded-lg max-w-6xl max-h-full overflow-auto"
             onClick={e => e.stopPropagation()}
           >
