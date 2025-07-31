@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import React, {useState, useEffect} from 'react';
+import {motion} from 'framer-motion';
 import SafeIcon from '../../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 import supabase from '../../lib/supabase';
 
-const { FiUpload, FiFile, FiTrash2, FiEye, FiPaperclip, FiAlertCircle, FiCheckCircle } = FiIcons;
+const {FiUpload, FiFile, FiTrash2, FiEye, FiPaperclip, FiAlertCircle, FiCheckCircle} = FiIcons;
 
-const DocumentsSection = ({ formData, updateFormData }) => {
+const DocumentsSection = ({formData, updateFormData}) => {
   const [uploadedFiles, setUploadedFiles] = useState(formData.documents || {});
   const [previewFile, setPreviewFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -19,13 +19,12 @@ const DocumentsSection = ({ formData, updateFormData }) => {
     // Crear el bucket 'claims' si no existe
     const createBucketIfNotExists = async () => {
       try {
-        const { data, error } = await supabase.storage.getBucket('claims');
-        
-        if (error && error.code === 'PGRST116') { // Bucket not found
-          const { error: createError } = await supabase.storage.createBucket('claims', {
+        const {data, error} = await supabase.storage.getBucket('claims');
+        if (error && error.code === 'PGRST116') {
+          // Bucket not found
+          const {error: createError} = await supabase.storage.createBucket('claims', {
             public: true, // Hacer el bucket público para poder acceder a los archivos
           });
-          
           if (createError) {
             console.error('Error creating bucket:', createError);
           } else {
@@ -36,15 +35,16 @@ const DocumentsSection = ({ formData, updateFormData }) => {
         console.error('Error checking bucket:', err);
       }
     };
-    
+
     createBucketIfNotExists();
   }, []);
 
   const handleFileUpload = async (documentType, files) => {
     if (!files || files.length === 0) return;
+
     setUploading(true);
     setUploadError(null);
-    
+
     try {
       // Store files locally for now, actual upload to Supabase will happen on form submission
       handleLocalUpload(documentType, files);
@@ -58,7 +58,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
 
   // Store files locally for now
   const handleLocalUpload = (documentType, files) => {
-    const newFiles = { ...uploadedFiles };
+    const newFiles = {...uploadedFiles};
     if (!newFiles[documentType]) {
       newFiles[documentType] = [];
     }
@@ -76,7 +76,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
 
     setUploadedFiles(newFiles);
     updateFormData('documents', newFiles);
-    
+
     // Show email form automatically
     setShowEmailForm(true);
   };
@@ -89,7 +89,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
 
     // Simulate sending files by email
     alert(`Los documentos se enviarán a: ${emailToSend}\n\nPor favor, espera la confirmación del equipo de soporte.`);
-    
+
     // Update form data to indicate email method was used
     updateFormData('documentsSentByEmail', {
       email: emailToSend,
@@ -98,7 +98,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
   };
 
   const removeFile = async (documentType, fileIndex) => {
-    const newFiles = { ...uploadedFiles };
+    const newFiles = {...uploadedFiles};
     if (newFiles[documentType]) {
       const fileToRemove = newFiles[documentType][fileIndex];
       
@@ -106,13 +106,13 @@ const DocumentsSection = ({ formData, updateFormData }) => {
       if (fileToRemove.url && fileToRemove.isLocal) {
         URL.revokeObjectURL(fileToRemove.url);
       }
-      
+
       // Remove file from list
       newFiles[documentType].splice(fileIndex, 1);
       if (newFiles[documentType].length === 0) {
         delete newFiles[documentType];
       }
-      
+
       setUploadedFiles(newFiles);
       updateFormData('documents', newFiles);
     }
@@ -159,7 +159,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
             title: 'Aviso de Accidente o Enfermedad',
             description: 'Formulario oficial para programación'
           });
-          
+
           if (formData.programmingService === 'cirugia' && formData.isCirugiaOrtopedica === true) {
             requirements.forms.push({
               id: 'formato-cirugia-traumatologia',
@@ -308,7 +308,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
 
   const requirements = getDocumentRequirements();
 
-  const FileUploadArea = ({ document }) => (
+  const FileUploadArea = ({document}) => (
     <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-[#204499] transition-colors">
       <input
         type="file"
@@ -328,7 +328,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
             <div className="absolute inset-0 rounded-full border-4 border-gray-200"></div>
             <div 
               className="absolute inset-0 rounded-full border-4 border-[#204499] border-t-transparent"
-              style={{ 
+              style={{
                 transform: `rotate(${uploadProgress[document.id] * 3.6}deg)`,
                 transition: 'transform 0.3s ease-in-out'
               }}
@@ -353,9 +353,9 @@ const DocumentsSection = ({ formData, updateFormData }) => {
     </div>
   );
 
-  const FileList = ({ documentType }) => {
+  const FileList = ({documentType}) => {
     const files = uploadedFiles[documentType] || [];
-    
+
     if (files.length === 0) {
       return (
         <div className="text-center py-8 text-gray-500">
@@ -364,14 +364,14 @@ const DocumentsSection = ({ formData, updateFormData }) => {
         </div>
       );
     }
-    
+
     return (
       <div className="space-y-3">
         {files.map((file, index) => (
           <motion.div
             key={index}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{opacity: 0, y: 10}}
+            animate={{opacity: 1, y: 0}}
             className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
           >
             <div className="flex items-center space-x-3">
@@ -406,7 +406,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
     );
   };
 
-  const DocumentSection = ({ title, documents, bgColor = "bg-white" }) => (
+  const DocumentSection = ({title, documents, bgColor = "bg-white"}) => (
     <div className={`${bgColor} rounded-xl p-6 shadow-sm`}>
       <h3 className="text-xl font-semibold text-gray-900 mb-6">{title}</h3>
       <div className="space-y-8">
@@ -440,7 +440,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
     if (!uploadedFiles['informe-medico'] || uploadedFiles['informe-medico'].length === 0) {
       return false;
     }
-    
+
     // Para los documentos de firma, solo verificamos si se eligió descarga física
     if (formData.signatureDocumentOption === 'download') {
       // Verificar que los documentos de firma estén cargados
@@ -451,26 +451,26 @@ const DocumentsSection = ({ formData, updateFormData }) => {
         }
       }
     }
-    
+
     // Verificar otros documentos requeridos
     const otherRequiredDocs = [
       ...requirements.sinisterDocs,
       ...requirements.receipts
     ];
-    
+
     for (let doc of otherRequiredDocs) {
       if (!uploadedFiles[doc.id] || uploadedFiles[doc.id].length === 0) {
         return false;
       }
     }
-    
+
     return true;
   };
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={{opacity: 0, y: 20}}
+      animate={{opacity: 1, y: 0}}
       className="space-y-8"
     >
       <div className="text-center mb-8">
@@ -484,8 +484,8 @@ const DocumentsSection = ({ formData, updateFormData }) => {
 
       {uploadError && (
         <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{opacity: 0, y: -10}}
+          animate={{opacity: 1, y: 0}}
           className="bg-red-50 text-red-800 p-4 rounded-lg mb-6"
         >
           <div className="font-medium">Error al subir documentos:</div>
@@ -496,8 +496,8 @@ const DocumentsSection = ({ formData, updateFormData }) => {
       {/* Mostrar información sobre firma digital si está seleccionada */}
       {formData.signatureDocumentOption === 'email' && (
         <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{opacity: 0, y: -10}}
+          animate={{opacity: 1, y: 0}}
           className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6"
         >
           <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
@@ -505,9 +505,8 @@ const DocumentsSection = ({ formData, updateFormData }) => {
             Documentos de Firma Digital
           </h3>
           <p className="text-gray-700">
-            Has seleccionado recibir los documentos de la aseguradora por email para firma digital.
-            Estos documentos se enviarán directamente a las personas correspondientes y no necesitas
-            subirlos aquí.
+            Has seleccionado recibir los documentos de la aseguradora por email para firma digital. 
+            Estos documentos se enviarán directamente a las personas correspondientes y no necesitas subirlos aquí.
           </p>
         </motion.div>
       )}
@@ -550,8 +549,8 @@ const DocumentsSection = ({ formData, updateFormData }) => {
       {/* Mensaje si faltan documentos requeridos */}
       {!areAllRequiredDocsUploaded() && (
         <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{opacity: 0, y: 10}}
+          animate={{opacity: 1, y: 0}}
           className="bg-amber-50 border border-amber-200 rounded-lg p-4"
         >
           <div className="flex items-center gap-2">
@@ -566,8 +565,8 @@ const DocumentsSection = ({ formData, updateFormData }) => {
       {/* Mensaje si todos los documentos están cargados */}
       {areAllRequiredDocsUploaded() && (
         <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{opacity: 0, y: 10}}
+          animate={{opacity: 1, y: 0}}
           className="bg-green-50 border border-green-200 rounded-lg p-4"
         >
           <div className="flex items-center gap-2">
@@ -582,12 +581,12 @@ const DocumentsSection = ({ formData, updateFormData }) => {
       {/* File Preview Modal - Mejorado para PDFs */}
       {previewFile && (
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
+          initial={{opacity: 0}}
+          animate={{opacity: 1}}
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
           onClick={() => setPreviewFile(null)}
         >
-          <div
+          <div 
             className="bg-white rounded-lg max-w-6xl max-h-full overflow-auto"
             onClick={e => e.stopPropagation()}
           >
@@ -608,11 +607,12 @@ const DocumentsSection = ({ formData, updateFormData }) => {
                   className="max-w-full h-auto"
                 />
               ) : previewFile.type === 'application/pdf' ? (
-                <div className="w-full h-96 md:h-[600px] flex justify-center items-center">
-                  <object
-                    data={previewFile.url}
+                <div className="w-full h-96 md:h-[600px]">
+                  <iframe
+                    src={previewFile.url}
                     type="application/pdf"
-                    className="w-full h-full"
+                    className="w-full h-full border-0"
+                    title={previewFile.name}
                   >
                     <div className="text-center py-8">
                       <SafeIcon icon={FiFile} className="text-6xl text-gray-400 mx-auto mb-4" />
@@ -628,7 +628,7 @@ const DocumentsSection = ({ formData, updateFormData }) => {
                         Abrir PDF en nueva pestaña
                       </a>
                     </div>
-                  </object>
+                  </iframe>
                 </div>
               ) : (
                 <div className="text-center py-8">

@@ -1,10 +1,10 @@
 import React from 'react';
-import { motion } from 'framer-motion';
-import { useNavigate, Link } from 'react-router-dom';
+import {motion} from 'framer-motion';
+import {useNavigate, Link} from 'react-router-dom';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
-const { FiArrowLeft } = FiIcons;
+const {FiArrowLeft} = FiIcons;
 
 const PrivacyPage = () => {
   const navigate = useNavigate();
@@ -17,14 +17,14 @@ const PrivacyPage = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+                whileHover={{scale: 1.05}}
+                whileTap={{scale: 0.95}}
                 onClick={() => navigate('/')}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 <SafeIcon icon={FiArrowLeft} className="text-xl text-gray-600" />
               </motion.button>
-              <img 
+              <img
                 src="https://storage.googleapis.com/msgsndr/HWRXLf7lstECUAG07eRw/media/685d77c05c72d29e532e823f.png"
                 alt="Fortex"
                 className="h-8"
@@ -36,8 +36,8 @@ const PrivacyPage = () => {
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{opacity: 0, y: 20}}
+          animate={{opacity: 1, y: 0}}
           className="bg-white rounded-lg shadow-sm p-8"
         >
           <h1 className="text-3xl font-bold text-gray-900 mb-6">Política de Privacidad</h1>
@@ -46,10 +46,13 @@ const PrivacyPage = () => {
             <section>
               <h2 className="text-2xl font-semibold text-gray-900 mb-3">1. Introducción</h2>
               <p>
-                En Fortex, nos comprometemos a proteger la privacidad y seguridad de la información personal de nuestros clientes. Esta Política de Privacidad describe cómo recopilamos, utilizamos, almacenamos y protegemos su información personal cuando utiliza nuestro Portal de Reclamos.
+                En Fortex, nos comprometemos a proteger la privacidad y seguridad de la información personal de nuestros clientes. 
+                Esta Política de Privacidad describe cómo recopilamos, utilizamos, almacenamos y protegemos su información personal 
+                cuando utiliza nuestro Portal de Reclamos.
               </p>
               <p className="mt-3">
-                Al utilizar nuestro Portal de Reclamos, usted acepta las prácticas descritas en esta Política de Privacidad. Si no está de acuerdo con esta política, por favor absténgase de utilizar nuestro portal.
+                Al utilizar nuestro Portal de Reclamos, usted acepta las prácticas descritas en esta Política de Privacidad. 
+                Si no está de acuerdo con esta política, por favor absténgase de utilizar nuestro portal.
               </p>
             </section>
 
@@ -101,7 +104,8 @@ const PrivacyPage = () => {
             <section>
               <h2 className="text-2xl font-semibold text-gray-900 mb-3">5. Seguridad de la Información</h2>
               <p>
-                Implementamos medidas de seguridad técnicas, administrativas y físicas para proteger su información personal contra accesos no autorizados, pérdida, uso indebido o alteración. Estas medidas incluyen:
+                Implementamos medidas de seguridad técnicas, administrativas y físicas para proteger su información personal 
+                contra accesos no autorizados, pérdida, uso indebido o alteración. Estas medidas incluyen:
               </p>
               <ul className="list-disc pl-6 space-y-2">
                 <li>Encriptación de datos sensibles.</li>
@@ -110,7 +114,8 @@ const PrivacyPage = () => {
                 <li>Capacitación de personal en prácticas de seguridad de datos.</li>
               </ul>
               <p className="mt-3">
-                A pesar de nuestros esfuerzos, ningún método de transmisión o almacenamiento electrónico es 100% seguro. Por lo tanto, no podemos garantizar la seguridad absoluta de su información.
+                A pesar de nuestros esfuerzos, ningún método de transmisión o almacenamiento electrónico es 100% seguro. 
+                Por lo tanto, no podemos garantizar la seguridad absoluta de su información.
               </p>
             </section>
 
@@ -135,24 +140,27 @@ const PrivacyPage = () => {
             <section>
               <h2 className="text-2xl font-semibold text-gray-900 mb-3">7. Retención de Datos</h2>
               <p>
-                Conservamos su información personal durante el tiempo necesario para cumplir con los propósitos para los que fue recopilada, incluido el cumplimiento de requisitos legales, resolución de disputas y aplicación de nuestros acuerdos.
+                Conservamos su información personal durante el tiempo necesario para cumplir con los propósitos para los que fue recopilada, 
+                incluido el cumplimiento de requisitos legales, resolución de disputas y aplicación de nuestros acuerdos.
               </p>
             </section>
 
             <section>
               <h2 className="text-2xl font-semibold text-gray-900 mb-3">8. Cambios a esta Política</h2>
               <p>
-                Podemos actualizar esta Política de Privacidad periódicamente para reflejar cambios en nuestras prácticas o requisitos legales. Le notificaremos sobre cambios significativos publicando la nueva política en nuestro portal o por otros medios apropiados.
+                Podemos actualizar esta Política de Privacidad periódicamente para reflejar cambios en nuestras prácticas o requisitos legales. 
+                Le notificaremos sobre cambios significativos publicando la nueva política en nuestro portal o por otros medios apropiados.
               </p>
             </section>
 
             <section>
               <h2 className="text-2xl font-semibold text-gray-900 mb-3">9. Contacto</h2>
               <p>
-                Si tiene preguntas o inquietudes sobre esta Política de Privacidad o el tratamiento de sus datos personales, por favor contáctenos a:
+                Si tiene preguntas o inquietudes sobre esta Política de Privacidad o el tratamiento de sus datos personales, 
+                por favor contáctenos a:
               </p>
               <p className="mt-3">
-                Email: privacidad@fortex.com<br />
+                Email: asistencia@fortex.mx<br />
                 Teléfono: +52 81 2209 5020
               </p>
             </section>
@@ -160,8 +168,8 @@ const PrivacyPage = () => {
 
           <div className="mt-8 text-center">
             <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+              whileHover={{scale: 1.05}}
+              whileTap={{scale: 0.95}}
               onClick={() => navigate('/')}
               className="bg-[#204499] hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors"
             >
