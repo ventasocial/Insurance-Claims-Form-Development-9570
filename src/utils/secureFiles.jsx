@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import {useState,useEffect,useCallback} from 'react';
 import React from 'react';
 
 /**
  * Genera una URL temporal firmada para un archivo en Supabase Storage
  * @param {Object} supabase - Cliente de Supabase
  * @param {string} filePath - Ruta del archivo en el bucket
- * @param {number} expiresIn - Tiempo de expiración en segundos (default: 3600 = 1 hora)
+ * @param {number} expiresIn - Tiempo de expiración en segundos (default: 3600=1 hora)
  * @returns {Promise<string|null>} URL firmada o null si hay error
  */
 export const generateSecureFileUrl = async (supabase, filePath, expiresIn = 3600) => {
@@ -132,10 +132,10 @@ export const useSecureFileUrl = (supabase, filePath) => {
 /**
  * Componente React para mostrar un archivo con URL segura
  */
-export const SecureFileLink = ({ 
-  supabase, 
-  filePath, 
-  fileName, 
+export const SecureFileLink = ({
+  supabase,
+  filePath,
+  fileName,
   children,
   className = '',
   onError = () => {},
@@ -162,7 +162,7 @@ export const SecureFileLink = ({
     return (
       <span className={`${className} text-red-500 flex items-center gap-2`}>
         ❌ Error: {error}
-        <button 
+        <button
           onClick={refresh}
           className="ml-2 text-blue-500 underline hover:text-blue-700 transition-colors"
         >
@@ -249,12 +249,12 @@ export const useClaimDocuments = (supabase, documents, submissionId) => {
         for (const doc of documents[docType]) {
           try {
             let filePath;
-            
+
             // Si ya tenemos una URL de Supabase Storage, extraer el path
             if (doc.url && doc.url.includes('/storage/v1/object/public/claims/')) {
               const urlParts = doc.url.split('/storage/v1/object/public/claims/');
               filePath = urlParts[1];
-            } 
+            }
             // Si es un archivo local con path construido
             else if (doc.path) {
               filePath = `${submissionId}/${docType}/${doc.path}`;
@@ -266,7 +266,6 @@ export const useClaimDocuments = (supabase, documents, submissionId) => {
 
             if (filePath) {
               const secureUrl = await generateSecureFileUrl(supabase, filePath);
-              
               documentUrls[docType].push({
                 name: doc.name,
                 type: doc.type,
@@ -314,7 +313,6 @@ export const useClaimDocuments = (supabase, documents, submissionId) => {
         totalFiles,
         processedFiles
       });
-
     } catch (error) {
       console.error('Error generando URLs de documentos:', error);
       setState(prev => ({
