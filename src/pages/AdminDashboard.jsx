@@ -5,8 +5,13 @@ import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 import supabase from '../lib/supabase';
 import WebhookManager from '../components/WebhookManager';
+import { useClaimDocuments, SecureFileLink } from '../utils/secureFiles';
 
-const { FiArrowLeft, FiUsers, FiFileText, FiCheckCircle, FiClock, FiExternalLink, FiDownload, FiLogOut, FiSettings, FiMessageCircle, FiSearch, FiFilter, FiArchive, FiTrash2, FiCalendar, FiCheck, FiX, FiZap } = FiIcons;
+const {
+  FiArrowLeft, FiUsers, FiFileText, FiCheckCircle, FiClock, FiExternalLink,
+  FiDownload, FiLogOut, FiSettings, FiMessageCircle, FiSearch, FiFilter,
+  FiArchive, FiTrash2, FiCalendar, FiCheck, FiX, FiZap, FiEye
+} = FiIcons;
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -18,6 +23,7 @@ const AdminDashboard = () => {
   const [selectedItems, setSelectedItems] = useState([]);
   const [showArchived, setShowArchived] = useState(false);
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [selectedSubmissionForFiles, setSelectedSubmissionForFiles] = useState(null);
 
   // Filtros
   const [filters, setFilters] = useState({
@@ -74,7 +80,8 @@ const AdminDashboard = () => {
         archived: item.archived || false,
         documentos: Object.keys(item.documentos || {}).reduce((acc, key) => {
           return acc + (item.documentos[key]?.length || 0);
-        }, 0)
+        }, 0),
+        rawDocuments: item.documentos // Agregar documentos completos para acceso seguro
       }));
 
       setSubmissions(formattedData);
@@ -236,6 +243,103 @@ const AdminDashboard = () => {
 
   const getUniqueValues = (field) => {
     return [...new Set(submissions.map(item => item[field]))].filter(Boolean);
+  };
+
+  // Componente para mostrar archivos del submission
+  const SubmissionFilesModal = ({ submission, onClose }) => {
+    const { documentUrls, loading: urlsLoading, error: urlsError } = useClaimDocuments(
+      supabase, 
+      submission.rawDocuments, 
+      submission.id
+    );
+
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      >
+        <div className="bg-white rounded-lg w-full max-w-4xl max-h-[80vh] overflow-auto">
+          <div className="p-4 border-b flex justify-between items-center sticky top-0 bg-white">
+            <h3 className="font-medium text-lg">
+              Documentos de {submission.nombre}
+            </h3>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 text-2xl"
+            >
+              ×
+            </button>
+          </div>
+          <div className="p-6">
+            {urlsLoading && (
+              <div className="text-center py-8">
+                <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
+                <p className="text-gray-600">
+                  Generando enlaces seguros... {Math.round((documentUrls.processedFiles / documentUrls.totalFiles) * 100) || 0}%
+                </p>
+              </div>
+            )}
+
+            {urlsError && (
+              <div className="bg-red-50 text-red-800 p-4 rounded-lg mb-4">
+                Error al cargar documentos: {urlsError}
+              </div>
+            )}
+
+            {!urlsLoading && Object.keys(documentUrls).length === 0 && (
+              <div className="text-center py-8 text-gray-500">
+                No hay documentos disponibles para este reclamo
+              </div>
+            )}
+
+            {!urlsLoading && Object.keys(documentUrls).length > 0 && (
+              <div className="space-y-6">
+                {Object.entries(documentUrls).map(([docType, docs]) => (
+                  <div key={docType} className="border rounded-lg p-4">
+                    <h4 className="font-medium text-gray-900 mb-3 capitalize">
+                      {docType.replace(/-/g, ' ')}
+                    </h4>
+                    <div className="space-y-2">
+                      {docs.map((doc, index) => (
+                        <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                          <div className="flex items-center gap-3">
+                            <SafeIcon icon={FiFileText} className="text-blue-500" />
+                            <div>
+                              <p className="font-medium text-sm">{doc.name}</p>
+                              <p className="text-xs text-gray-500">
+                                {doc.size ? `${(doc.size / 1024 / 1024).toFixed(2)} MB` : 'Tamaño desconocido'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {doc.success ? (
+                              <a
+                                href={doc.secureUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 text-blue-600 hover:text-blue-800 transition-colors"
+                              >
+                                <SafeIcon icon={FiEye} className="text-sm" />
+                                Ver
+                              </a>
+                            ) : (
+                              <span className="text-red-500 text-sm">
+                                Error al generar enlace
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    );
   };
 
   if (loading) {
@@ -557,7 +661,6 @@ const AdminDashboard = () => {
                     Limpiar Filtros
                   </button>
                 </div>
-
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
@@ -666,7 +769,18 @@ const AdminDashboard = () => {
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {submission.documentos}
+                            <div className="flex items-center gap-2">
+                              <span>{submission.documentos}</span>
+                              {submission.documentos > 0 && (
+                                <button
+                                  onClick={() => setSelectedSubmissionForFiles(submission)}
+                                  className="text-blue-600 hover:text-blue-800 transition-colors"
+                                  title="Ver documentos"
+                                >
+                                  <SafeIcon icon={FiEye} className="text-sm" />
+                                </button>
+                              )}
+                            </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             <motion.button
@@ -787,6 +901,14 @@ const AdminDashboard = () => {
               </div>
             </div>
           </motion.div>
+        )}
+
+        {/* Modal para ver archivos */}
+        {selectedSubmissionForFiles && (
+          <SubmissionFilesModal
+            submission={selectedSubmissionForFiles}
+            onClose={() => setSelectedSubmissionForFiles(null)}
+          />
         )}
       </div>
     </div>

@@ -3,6 +3,8 @@ import { motion } from 'framer-motion';
 import SafeIcon from '../../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 import { ensureBucketExists } from '../../lib/supabase';
+import { SecureFileLink } from '../../utils/secureFiles';
+import supabase from '../../lib/supabase';
 
 const { FiUpload, FiFile, FiTrash2, FiEye, FiPaperclip, FiAlertCircle, FiCheckCircle } = FiIcons;
 

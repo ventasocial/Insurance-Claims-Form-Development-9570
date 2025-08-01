@@ -1,8 +1,15 @@
 import supabase from './supabase';
+import { generateSecureFileUrl, generateMultipleSecureUrls } from '../utils/secureFiles';
 
-/** * Servicio para manejar webhooks - Implementación directa sin Edge Functions */
+/**
+ * Servicio para manejar webhooks - Implementación directa sin Edge Functions
+ */
 export class WebhookService {
-  /** * Dispara todos los webhooks activos para un evento específico * @param {string} event - El evento que disparó el webhook * @param {Object} data - Los datos a enviar en el webhook */
+  /**
+   * Dispara todos los webhooks activos para un evento específico
+   * @param {string} event - El evento que disparó el webhook
+   * @param {Object} data - Los datos a enviar en el webhook
+   */
   static async triggerWebhooks(event, data) {
     try {
       console.log(`🚀 Triggering webhooks for event: ${event}`);
@@ -58,12 +65,19 @@ export class WebhookService {
     }
   }
 
-  /** * Valida si una URL es de Albato * @param {string} url - URL a validar */
+  /**
+   * Valida si una URL es de Albato
+   * @param {string} url - URL a validar
+   */
   static isAlbatoUrl(url) {
     return url && (url.includes('albato.com') || url.includes('h.albato.com'));
   }
 
-  /** * Envía un webhook directamente * @param {Object} webhook - Configuración del webhook * @param {Object} payload - Datos a enviar */
+  /**
+   * Envía un webhook directamente
+   * @param {Object} webhook - Configuración del webhook
+   * @param {Object} payload - Datos a enviar
+   */
   static async sendWebhook(webhook, payload) {
     try {
       console.log(`📡 Sending webhook to: ${webhook.name} (${webhook.url})`);
@@ -174,7 +188,10 @@ export class WebhookService {
     }
   }
 
-  /** * Prueba la conectividad con una URL de webhook * @param {string} url - URL a probar */
+  /**
+   * Prueba la conectividad con una URL de webhook
+   * @param {string} url - URL a probar
+   */
   static async testConnectivity(url) {
     try {
       console.log(`🔍 Testing connectivity to: ${url}`);
@@ -245,7 +262,6 @@ export class WebhookService {
       };
     } catch (error) {
       console.error('💥 Connectivity test failed:', error);
-
       return {
         success: false,
         error: error.message,
@@ -255,7 +271,10 @@ export class WebhookService {
     }
   }
 
-  /** * Prueba un webhook con datos completos * @param {Object} webhook - Configuración del webhook */
+  /**
+   * Prueba un webhook con datos completos
+   * @param {Object} webhook - Configuración del webhook
+   */
   static async testWebhookComplete(webhook) {
     try {
       console.log(`🧪 Testing webhook: ${webhook.name} (${webhook.url})`);
@@ -334,7 +353,6 @@ export class WebhookService {
       };
     } catch (error) {
       console.error('💥 Complete webhook test failed:', error);
-
       return {
         success: false,
         error: error.message,
@@ -343,7 +361,10 @@ export class WebhookService {
     }
   }
 
-  /** * Reenvía manualmente un webhook fallido * @param {string} logId - ID del log del webhook fallido */
+  /**
+   * Reenvía manualmente un webhook fallido
+   * @param {string} logId - ID del log del webhook fallido
+   */
   static async manualRetry(logId) {
     try {
       // Obtener el log del webhook fallido
@@ -393,7 +414,14 @@ export class WebhookService {
     }
   }
 
-  /** * Registra el resultado de un webhook en la base de datos * @param {string} webhookId - ID del webhook * @param {Object} payload - Datos enviados * @param {boolean} success - Si fue exitoso * @param {number} statusCode - Código de estado HTTP * @param {string} responseBody - Cuerpo de la respuesta */
+  /**
+   * Registra el resultado de un webhook en la base de datos
+   * @param {string} webhookId - ID del webhook
+   * @param {Object} payload - Datos enviados
+   * @param {boolean} success - Si fue exitoso
+   * @param {number} statusCode - Código de estado HTTP
+   * @param {string} responseBody - Cuerpo de la respuesta
+   */
   static async logWebhookResult(webhookId, payload, success, statusCode, responseBody) {
     try {
       // Preparar datos de log con validación
@@ -443,7 +471,6 @@ export class WebhookService {
         };
 
         console.log('🔄 Retrying with simplified data...');
-
         const { error: retryError } = await supabase
           .from('webhook_logs_r2x4')
           .insert([simplifiedLogData]);
@@ -461,8 +488,13 @@ export class WebhookService {
     }
   }
 
-  /** * Obtiene las URLs públicas de los documentos subidos a Supabase Storage * @param {string} submissionId - ID de la submisión * @param {Object} documents - Objeto con documentos del formulario * @returns {Promise<Object>} - Objeto con las URLs públicas de los documentos */
-  static async getDocumentPublicUrls(submissionId, documents) {
+  /**
+   * Obtiene las URLs públicas de los documentos subidos a Supabase Storage
+   * @param {string} submissionId - ID de la submisión
+   * @param {Object} documents - Objeto con documentos del formulario
+   * @returns {Promise<Object>} - Objeto con las URLs seguras de los documentos
+   */
+  static async getDocumentSecureUrls(submissionId, documents) {
     try {
       if (!documents || Object.keys(documents).length === 0) {
         return {};
@@ -478,31 +510,42 @@ export class WebhookService {
 
         result[docType] = [];
 
-        // Para cada documento del tipo, obtener su URL pública
+        // Para cada documento del tipo, obtener su URL segura
         for (const doc of documents[docType]) {
-          // Si ya tenemos una URL (archivo local), construir la URL de Supabase
-          if (doc.url && doc.isLocal) {
-            // Construir la URL usando la estructura correcta del bucket
-            const publicUrl = `${supabase.supabaseUrl}/storage/v1/object/public/claims/${submissionId}/${docType}/${doc.name}`;
+          let filePath;
+
+          // Si ya tenemos una URL de Supabase Storage, extraer el path
+          if (doc.url && doc.url.includes('/storage/v1/object/public/claims/')) {
+            const urlParts = doc.url.split('/storage/v1/object/public/claims/');
+            filePath = urlParts[1];
+          } 
+          // Si es un archivo local con path construido
+          else if (doc.path) {
+            filePath = `${submissionId}/${docType}/${doc.path}`;
+          }
+          // Construir path basado en el nombre del archivo
+          else if (doc.name) {
+            filePath = `${submissionId}/${docType}/${doc.name}`;
+          }
+
+          if (filePath) {
+            const secureUrl = await generateSecureFileUrl(supabase, filePath);
             
             result[docType].push({
               name: doc.name,
               type: doc.type,
               size: doc.size,
-              url: publicUrl
+              url: secureUrl || doc.url, // Fallback a URL original si falla la segura
+              secure: secureUrl !== null
             });
-          }
-          // Si es una URL de Supabase Storage
-          else if (doc.path) {
-            const { data: publicUrl } = supabase.storage
-              .from('claims')
-              .getPublicUrl(`${submissionId}/${docType}/${doc.path}`);
-
+          } else {
+            // Si no podemos determinar el path, mantener la URL original
             result[docType].push({
-              name: doc.name || doc.path.split('/').pop(),
-              type: doc.type || 'application/octet-stream',
-              size: doc.size || 0,
-              url: publicUrl.publicUrl
+              name: doc.name,
+              type: doc.type,
+              size: doc.size,
+              url: doc.url,
+              secure: false
             });
           }
         }
@@ -510,18 +553,22 @@ export class WebhookService {
 
       return result;
     } catch (error) {
-      console.error('Error getting document public URLs:', error);
+      console.error('Error getting document secure URLs:', error);
       return {};
     }
   }
 
-  /** * Transforma los datos del formulario para el webhook * @param {Object} formData - Datos del formulario * @param {string} submissionId - ID de la submisión */
+  /**
+   * Transforma los datos del formulario para el webhook
+   * @param {Object} formData - Datos del formulario
+   * @param {string} submissionId - ID de la submisión
+   */
   static async transformFormDataForWebhook(formData, submissionId) {
     console.log('🔄 Transforming form data for webhook...');
     console.log('📋 Original form data:', formData);
 
-    // Obtener URLs públicas de los documentos
-    const documentUrls = await this.getDocumentPublicUrls(submissionId, formData.documents);
+    // Obtener URLs seguras de los documentos
+    const documentUrls = await this.getDocumentSecureUrls(submissionId, formData.documents);
 
     const transformedData = {
       submission_id: submissionId,
@@ -552,12 +599,12 @@ export class WebhookService {
       },
       // Descripción del siniestro
       sinister_description: formData.sinisterDescription,
-      // Información de documentos
+      // Información de documentos con URLs seguras
       documents_info: {
         signature_option: formData.signatureDocumentOption,
         documents_sent_by_email: formData.documentsSentByEmail,
         uploaded_documents_count: this.countUploadedDocuments(formData.documents),
-        document_urls: documentUrls // Incluir URLs de los documentos
+        document_urls: documentUrls // URLs seguras generadas
       },
       // Términos y condiciones
       legal_acceptance: {
@@ -569,7 +616,8 @@ export class WebhookService {
         created_at: new Date().toISOString(),
         status: 'Enviado',
         source: 'fortex_claims_portal',
-        bucket_base_url: `${supabase.supabaseUrl}/storage/v1/object/public/claims/${submissionId}`
+        bucket_base_url: `${supabase.supabaseUrl}/storage/v1/object/public/claims/${submissionId}`,
+        secure_urls_generated: true
       }
     };
 
@@ -577,7 +625,10 @@ export class WebhookService {
     return transformedData;
   }
 
-  /** * Transforma los datos de una persona para el webhook * @param {Object} personData - Datos de la persona */
+  /**
+   * Transforma los datos de una persona para el webhook
+   * @param {Object} personData - Datos de la persona
+   */
   static transformPersonData(personData) {
     if (!personData) return null;
 
@@ -591,7 +642,10 @@ export class WebhookService {
     };
   }
 
-  /** * Cuenta los documentos subidos * @param {Object} documents - Objeto con documentos */
+  /**
+   * Cuenta los documentos subidos
+   * @param {Object} documents - Objeto con documentos
+   */
   static countUploadedDocuments(documents) {
     if (!documents) return 0;
 
@@ -601,7 +655,6 @@ export class WebhookService {
         count += docArray.length;
       }
     });
-
     return count;
   }
 }
