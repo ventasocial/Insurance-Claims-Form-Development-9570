@@ -1,5 +1,5 @@
 import supabase from './supabase';
-import { generateSecureFileUrl } from '../utils/secureFiles';
+import { generateSecureFileUrl, generateMultipleSecureUrls } from '../utils/secureFiles';
 
 /**
  * Servicio para manejar webhooks - Implementación directa sin Edge Functions
@@ -43,7 +43,7 @@ export class WebhookService {
 
       console.log('📤 Final payload being sent:', JSON.stringify(payload, null, 2));
 
-      // Disparar cada webhook directamente
+      // Disparar cada webhook directamente (sin Edge Functions)
       const webhookPromises = webhooks.map(webhook =>
         this.sendWebhook(webhook, payload)
       );
@@ -81,6 +81,7 @@ export class WebhookService {
   static async sendWebhook(webhook, payload) {
     try {
       console.log(`📡 Sending webhook to: ${webhook.name} (${webhook.url})`);
+      console.log(`📋 Payload being sent:`, JSON.stringify(payload, null, 2));
 
       // Headers básicos y compatibles con Albato
       let headers = {
@@ -97,6 +98,7 @@ export class WebhookService {
         };
         console.log('🔗 Using Albato-compatible headers');
       } else {
+        // Para URLs que no son de Albato, podemos usar headers adicionales
         headers = {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -109,6 +111,7 @@ export class WebhookService {
       // Parsear headers personalizados de manera segura
       try {
         const customHeaders = webhook.headers ? JSON.parse(webhook.headers) : {};
+        // Solo añadir headers personalizados si no es Albato
         if (!this.isAlbatoUrl(webhook.url)) {
           headers = { ...headers, ...customHeaders };
         } else {
@@ -131,6 +134,7 @@ export class WebhookService {
       }, 30000); // 30 segundos de timeout
 
       console.log('📤 Making HTTP request...');
+      console.log('📋 Headers being sent:', JSON.stringify(headers, null, 2));
 
       // Enviar la petición
       const response = await fetch(webhook.url, {
@@ -149,7 +153,7 @@ export class WebhookService {
 
       console.log(`📥 Response received: ${statusCode} - ${responseText.substring(0, 200)}`);
 
-      // Registrar el resultado del webhook
+      // Registrar el resultado del webhook con manejo de errores mejorado
       try {
         await this.logWebhookResult(
           webhook.id,
@@ -160,13 +164,14 @@ export class WebhookService {
         );
       } catch (logError) {
         console.error('💥 Error logging webhook result (but webhook was sent):', logError);
+        // No lanzar error aquí para no afectar el envío principal
       }
 
       return { success, statusCode, responseText };
     } catch (error) {
       console.error(`💥 Error sending webhook to ${webhook.name}:`, error);
 
-      // Registrar el error
+      // Registrar el error con manejo de errores mejorado
       try {
         await this.logWebhookResult(
           webhook.id,
@@ -191,6 +196,7 @@ export class WebhookService {
     try {
       console.log(`🔍 Testing connectivity to: ${url}`);
 
+      // Payload de prueba simple
       const testPayload = {
         event: 'connectivity_test',
         timestamp: new Date().toISOString(),
@@ -201,12 +207,13 @@ export class WebhookService {
         }
       };
 
-      // Headers básicos
+      // Headers básicos y compatibles
       let headers = {
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       };
 
+      // Añadir headers específicos para Albato
       const isAlbato = this.isAlbatoUrl(url);
       if (isAlbato) {
         headers = {
@@ -214,6 +221,7 @@ export class WebhookService {
           'Accept': 'application/json',
           'User-Agent': 'Fortex-Webhook-Test/1.0'
         };
+        console.log('🔗 Using Albato-compatible headers for test');
       } else {
         headers = {
           'Content-Type': 'application/json',
@@ -224,11 +232,13 @@ export class WebhookService {
         };
       }
 
+      // Crear un controlador de aborto para el timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
         controller.abort();
-      }, 15000); // 15 segundos para pruebas
+      }, 15000); // 15 segundos de timeout para pruebas
 
+      // Enviar la petición
       const response = await fetch(url, {
         method: 'POST',
         headers: headers,
@@ -238,6 +248,7 @@ export class WebhookService {
 
       clearTimeout(timeoutId);
 
+      // Procesar la respuesta
       const responseText = await response.text();
       const success = response.ok;
       const statusCode = response.status;
@@ -268,7 +279,7 @@ export class WebhookService {
     try {
       console.log(`🧪 Testing webhook: ${webhook.name} (${webhook.url})`);
 
-      // Datos de prueba
+      // Datos de prueba que simularían un reclamo real
       const testData = {
         submission_id: 'test-' + Date.now(),
         contact_info: {
@@ -285,6 +296,38 @@ export class WebhookService {
           reimbursement_type: 'inicial',
           service_types: ['hospital', 'medicamentos']
         },
+        persons_involved: {
+          titular_asegurado: {
+            nombres: 'Juan',
+            apellido_paterno: 'Pérez',
+            apellido_materno: 'García',
+            email: 'juan.perez@example.com',
+            telefono: '+528122334455',
+            full_name: 'Juan Pérez García'
+          },
+          asegurado_afectado: {
+            nombres: 'María',
+            apellido_paterno: 'Pérez',
+            apellido_materno: 'López',
+            email: 'maria.perez@example.com',
+            telefono: '+528122334456',
+            full_name: 'María Pérez López'
+          }
+        },
+        sinister_description: 'Descripción de prueba del siniestro para verificar el webhook',
+        documents_info: {
+          uploaded_documents_count: 5,
+          document_urls: {
+            'informe-medico': [
+              {
+                name: 'informe-medico-test.pdf',
+                type: 'application/pdf',
+                size: 1024000,
+                url: `${supabase.supabaseUrl}/storage/v1/object/public/claims/test-${Date.now()}/informe-medico/informe-medico-test.pdf`
+              }
+            ]
+          }
+        },
         metadata: {
           created_at: new Date().toISOString(),
           status: 'Test',
@@ -298,6 +341,9 @@ export class WebhookService {
         data: testData
       };
 
+      console.log('🧪 Test payload prepared:', JSON.stringify(payload, null, 2));
+
+      // Enviar el webhook de prueba
       const result = await this.sendWebhook(webhook, payload);
 
       return {
@@ -316,6 +362,59 @@ export class WebhookService {
   }
 
   /**
+   * Reenvía manualmente un webhook fallido
+   * @param {string} logId - ID del log del webhook fallido
+   */
+  static async manualRetry(logId) {
+    try {
+      // Obtener el log del webhook fallido
+      const { data: log, error: logError } = await supabase
+        .from('webhook_logs_r2x4')
+        .select('*')
+        .eq('id', logId)
+        .single();
+
+      if (logError || !log) {
+        throw new Error('Log not found');
+      }
+
+      // Obtener la configuración del webhook
+      const { data: webhook, error: webhookError } = await supabase
+        .from('webhooks_r2x4')
+        .select('*')
+        .eq('id', log.webhook_id)
+        .single();
+
+      if (webhookError || !webhook) {
+        throw new Error('Webhook not found');
+      }
+
+      if (!webhook.enabled) {
+        throw new Error('Webhook is disabled');
+      }
+
+      // Parsear el payload original de manera segura
+      let payload;
+      try {
+        payload = JSON.parse(log.payload || log.request_payload || '{}');
+      } catch (e) {
+        throw new Error('Invalid payload JSON in log');
+      }
+
+      // Actualizar el retry count
+      payload.retry_count = (log.retry_count || 0) + 1;
+
+      // Enviar el webhook
+      await this.sendWebhook(webhook, payload);
+
+      return { success: true, message: 'Webhook retry initiated' };
+    } catch (error) {
+      console.error('Error in manual retry:', error);
+      return { success: false, message: error.message };
+    }
+  }
+
+  /**
    * Registra el resultado de un webhook en la base de datos
    * @param {string} webhookId - ID del webhook
    * @param {Object} payload - Datos enviados
@@ -325,16 +424,26 @@ export class WebhookService {
    */
   static async logWebhookResult(webhookId, payload, success, statusCode, responseBody) {
     try {
+      // Preparar datos de log con validación
       const logData = {
         webhook_id: webhookId,
         event: payload.event || 'unknown',
         status_code: statusCode || 0,
-        success: success === true,
-        response_body: responseBody ? responseBody.substring(0, 5000) : '',
-        payload: JSON.stringify(payload).substring(0, 10000),
+        success: success === true, // Asegurar que sea boolean
+        response_body: responseBody ? responseBody.substring(0, 5000) : '', // Limitar tamaño
+        payload: JSON.stringify(payload).substring(0, 10000), // Limitar tamaño del payload
         sent_at: new Date().toISOString(),
         retry_count: payload.retry_count || 0
       };
+
+      console.log('📝 Attempting to log webhook result:', {
+        webhook_id: logData.webhook_id,
+        event: logData.event,
+        success: logData.success,
+        status_code: logData.status_code,
+        payload_size: logData.payload.length,
+        response_size: logData.response_body.length
+      });
 
       const { error } = await supabase
         .from('webhook_logs_r2x4')
@@ -342,11 +451,110 @@ export class WebhookService {
 
       if (error) {
         console.error('💥 Error logging webhook result:', error);
+        console.error('💥 Error details:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        });
+
+        // Intentar con datos simplificados si hay error
+        const simplifiedLogData = {
+          webhook_id: webhookId,
+          event: payload.event || 'unknown',
+          status_code: statusCode || 0,
+          success: success === true,
+          response_body: responseBody ? 'Response received' : 'No response',
+          payload: JSON.stringify({ event: payload.event, timestamp: payload.timestamp }),
+          sent_at: new Date().toISOString(),
+          retry_count: 0
+        };
+
+        console.log('🔄 Retrying with simplified data...');
+        const { error: retryError } = await supabase
+          .from('webhook_logs_r2x4')
+          .insert([simplifiedLogData]);
+
+        if (retryError) {
+          console.error('💥 Failed to log even simplified data:', retryError);
+        } else {
+          console.log('✅ Logged simplified webhook result');
+        }
       } else {
         console.log(`📝 Logged webhook result: ${success ? 'SUCCESS' : 'FAILED'} (${statusCode})`);
       }
     } catch (error) {
       console.error('💥 Error in logWebhookResult function:', error);
+    }
+  }
+
+  /**
+   * Obtiene las URLs públicas de los documentos subidos a Supabase Storage
+   * @param {string} submissionId - ID de la submisión
+   * @param {Object} documents - Objeto con documentos del formulario
+   * @returns {Promise<Object>} - Objeto con las URLs seguras de los documentos
+   */
+  static async getDocumentSecureUrls(submissionId, documents) {
+    try {
+      if (!documents || Object.keys(documents).length === 0) {
+        return {};
+      }
+
+      const result = {};
+
+      // Procesar cada tipo de documento
+      for (const docType in documents) {
+        if (!Array.isArray(documents[docType]) || documents[docType].length === 0) {
+          continue;
+        }
+
+        result[docType] = [];
+
+        // Para cada documento del tipo, obtener su URL segura
+        for (const doc of documents[docType]) {
+          let filePath;
+
+          // Si ya tenemos una URL de Supabase Storage, extraer el path
+          if (doc.url && doc.url.includes('/storage/v1/object/public/claims/')) {
+            const urlParts = doc.url.split('/storage/v1/object/public/claims/');
+            filePath = urlParts[1];
+          } 
+          // Si es un archivo local con path construido
+          else if (doc.path) {
+            filePath = `${submissionId}/${docType}/${doc.path}`;
+          }
+          // Construir path basado en el nombre del archivo
+          else if (doc.name) {
+            filePath = `${submissionId}/${docType}/${doc.name}`;
+          }
+
+          if (filePath) {
+            const secureUrl = await generateSecureFileUrl(supabase, filePath);
+            
+            result[docType].push({
+              name: doc.name,
+              type: doc.type,
+              size: doc.size,
+              url: secureUrl || doc.url, // Fallback a URL original si falla la segura
+              secure: secureUrl !== null
+            });
+          } else {
+            // Si no podemos determinar el path, mantener la URL original
+            result[docType].push({
+              name: doc.name,
+              type: doc.type,
+              size: doc.size,
+              url: doc.url,
+              secure: false
+            });
+          }
+        }
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Error getting document secure URLs:', error);
+      return {};
     }
   }
 
@@ -357,10 +565,13 @@ export class WebhookService {
    */
   static async transformFormDataForWebhook(formData, submissionId) {
     console.log('🔄 Transforming form data for webhook...');
+    console.log('📋 Original form data:', formData);
+
+    // Obtener URLs seguras de los documentos
+    const documentUrls = await this.getDocumentSecureUrls(submissionId, formData.documents);
 
     const transformedData = {
       submission_id: submissionId,
-      
       // Información de contacto
       contact_info: {
         nombres: formData.contactInfo?.nombres,
@@ -370,7 +581,6 @@ export class WebhookService {
         telefono: formData.contactInfo?.telefono,
         full_name: `${formData.contactInfo?.nombres || ''} ${formData.contactInfo?.apellidoPaterno || ''} ${formData.contactInfo?.apellidoMaterno || ''}`.trim()
       },
-      
       // Información del reclamo
       claim_info: {
         insurance_company: formData.insuranceCompany,
@@ -381,35 +591,33 @@ export class WebhookService {
         programming_service: formData.programmingService,
         surgery_type: formData.isCirugiaOrtopedica ? 'traumatologia_ortopedia_neurologia' : 'other'
       },
-      
       // Personas involucradas
       persons_involved: {
         titular_asegurado: this.transformPersonData(formData.personsInvolved?.titularAsegurado),
         asegurado_afectado: this.transformPersonData(formData.personsInvolved?.aseguradoAfectado),
         titular_cuenta: this.transformPersonData(formData.personsInvolved?.titularCuenta)
       },
-      
       // Descripción del siniestro
       sinister_description: formData.sinisterDescription,
-      
-      // Información de documentos
+      // Información de documentos con URLs seguras
       documents_info: {
         signature_option: formData.signatureDocumentOption,
         documents_sent_by_email: formData.documentsSentByEmail,
-        uploaded_documents_count: this.countUploadedDocuments(formData.documents)
+        uploaded_documents_count: this.countUploadedDocuments(formData.documents),
+        document_urls: documentUrls // URLs seguras generadas
       },
-      
       // Términos y condiciones
       legal_acceptance: {
         accepted_terms: formData.acceptedTerms,
         accepted_privacy: formData.acceptedPrivacy
       },
-      
       // Metadatos
       metadata: {
         created_at: new Date().toISOString(),
         status: 'Enviado',
-        source: 'fortex_claims_portal'
+        source: 'fortex_claims_portal',
+        bucket_base_url: `${supabase.supabaseUrl}/storage/v1/object/public/claims/${submissionId}`,
+        secure_urls_generated: true
       }
     };
 
@@ -440,7 +648,7 @@ export class WebhookService {
    */
   static countUploadedDocuments(documents) {
     if (!documents) return 0;
-    
+
     let count = 0;
     Object.values(documents).forEach(docArray => {
       if (Array.isArray(docArray)) {
